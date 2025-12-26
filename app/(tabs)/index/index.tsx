@@ -3,6 +3,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   Alert,
   RefreshControl,
+  Modal,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import {
   Card,
@@ -15,10 +18,13 @@ import {
   H4,
   H3,
   H2,
-  Progress,
+  // Progress,
+  Input,
+  Fieldset,
+  Label,
 } from 'tamagui';
 import type { AppDispatch } from '@/(redux)/store';
-import { useFocusEffect, router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 
 // Redux imports
 import {
@@ -26,52 +32,255 @@ import {
   selectDashboardSummary,
   selectDashboardLoading,
   selectDashboardError,
-  selectLastUpdated,
-  selectPendingDelivery,
-  selectShopStockSummary,
-  selectStoreStockSummary,
+  // selectLastUpdated,
+  // selectPendingDelivery,
+  // selectShopStockSummary,
+  // selectStoreStockSummary,
   selectStockAlerts,
-  selectTotalSales,
-  selectDeliveredItemsCount,
-  selectTotalPendingItems,
-  selectShopsWithPending,
+  // selectTotalSales,
+  // selectDeliveredItemsCount,
+  // selectTotalPendingItems,
+  // selectShopsWithPending,
   selectTotalAlerts,
   selectCriticalAlerts,
-  selectDeliveryPerformance,
+  // selectDeliveryPerformance,
   selectAlertSummary,
 } from '@/(redux)/dashboard';
 
 // Auth imports
-import { selectIsAuthenticated } from '@/(redux)/authSlice';
 
 // Socket imports
 import { useSocketSafe } from '@/(redux)/notification';
 import { Notification } from '@/(services)/socket';
 
+// Format number with commas - Moved to top level
+const formatNumber = (num: number) => {
+  return new Intl.NumberFormat('en-US').format(num);
+};
+
+// Alert Item Component
+const AlertItem = ({ alert, type }: { alert: any; type: 'expired' | 'lowStock' | 'expiringSoon' }) => {
+  const getBackgroundColor = () => {
+    switch (type) {
+      case 'expired': return '$red2';
+      case 'lowStock': return '$orange2';
+      case 'expiringSoon': return '$yellow2';
+      default: return '$orange2';
+    }
+  };
+
+  const getTextColor = () => {
+    switch (type) {
+      case 'expired': return '$red12';
+      case 'lowStock': return '$orange12';
+      case 'expiringSoon': return '$yellow12';
+      default: return '$orange12';
+    }
+  };
+
+  const getSubTextColor = () => {
+    switch (type) {
+      case 'expired': return '$red10';
+      case 'lowStock': return '$orange10';
+      case 'expiringSoon': return '$yellow10';
+      default: return '$orange10';
+    }
+  };
+
+  return (
+    <Card 
+      backgroundColor={getBackgroundColor()} 
+      padding="$3" 
+      borderRadius="$3" 
+      marginVertical="$1"
+    >
+      <YStack space="$2">
+        <Text fontSize="$3" fontWeight="600" color={getTextColor()}>
+          {alert.name || 'Unknown Product'}
+        </Text>
+        <Text fontSize="$1" color={getSubTextColor()}>
+          {alert.locationName || 'Unknown Location'} • {alert.productCode || 'N/A'}
+        </Text>
+        <Text fontSize="$1" color={getSubTextColor()}>
+          Batch: {alert.batchNumber || 'N/A'} • Qty: {formatNumber(alert.quantity || 0)} {alert.unit || 'unit'}
+        </Text>
+        {type === 'expired' && (
+          <Text fontSize="$1" color={getSubTextColor()} fontStyle="italic">
+            Expired: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
+          </Text>
+        )}
+        {type === 'lowStock' && (
+          <Text fontSize="$1" color={getSubTextColor()} fontStyle="italic">
+            Warning at: {formatNumber(alert.warningQuantity || 0)}
+          </Text>
+        )}
+        {type === 'expiringSoon' && (
+          <Text fontSize="$1" color={getSubTextColor()} fontStyle="italic">
+            Expires: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
+          </Text>
+        )}
+      </YStack>
+    </Card>
+  );
+};
+
+// Full List Modal Component
+const FullListModal = ({
+  visible,
+  onClose,
+  title,
+  items,
+  type,
+  searchQuery,
+  setSearchQuery,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  items: any[];
+  type: 'expired' | 'lowStock' | 'expiringSoon';
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+}) => {
+  const [filteredItems, setFilteredItems] = useState(items);
+
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredItems(items);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = items.filter(item => 
+        (item.name || '').toLowerCase().includes(query) ||
+        (item.productCode || '').toLowerCase().includes(query) ||  // Fixed: changed from alert to item
+        (item.batchNumber || '').toLowerCase().includes(query) || // Fixed: changed from alert to item
+        (item.locationName || '').toLowerCase().includes(query)   // Fixed: changed from alert to item
+      );
+      setFilteredItems(filtered);
+    }
+  }, [searchQuery, items]);
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <YStack 
+          flex={1} 
+          backgroundColor="rgba(0,0,0,0.5)" 
+          justifyContent="flex-end"
+        >
+          <TouchableWithoutFeedback>
+            <YStack 
+              backgroundColor="$orange1" 
+              borderTopLeftRadius="$4" 
+              borderTopRightRadius="$4" 
+              padding="$4"
+              maxHeight="85%"
+              borderWidth={1}
+              borderColor="$orange4"
+            >
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <YStack space="$4">
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <H4 color="$orange12">{title}</H4>
+                    <Button
+                      size="$2"
+                      circular
+                      backgroundColor="$orange3"
+                      onPress={onClose}
+                    >
+                      <Text color="$orange11">✕</Text>
+                    </Button>
+                  </XStack>
+
+                  <Text fontSize="$2" color="$orange10">
+                    Total: {items.length} items
+                  </Text>
+
+                  {/* Search Input */}
+                  <Fieldset>
+                    <Label htmlFor="search" fontSize="$3" fontWeight="600" color="$orange11">
+                      Search
+                    </Label>
+                    <Input
+                      id="search"
+                      placeholder="Search by name, code, batch, or location..."
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      borderColor="$orange5"
+                      backgroundColor="$orange1"
+                    />
+                  </Fieldset>
+
+                  {/* Search Results Summary */}
+                  {searchQuery && (
+                    <Card backgroundColor="$orange2" padding="$2" borderRadius="$2">
+                      <Text fontSize="$2" color="$orange11">
+                        Found {filteredItems.length} items matching &quot;{searchQuery}&quot; {/* Fixed: escaped quotes */}
+                      </Text>
+                    </Card>
+                  )}
+
+                  {/* Items List */}
+                  <YStack space="$2">
+                    {filteredItems.length === 0 ? (
+                      <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
+                        <Text color="$orange11" textAlign="center">
+                          No items found{searchQuery ? ' matching your search' : ''}
+                        </Text>
+                      </Card>
+                    ) : (
+                      filteredItems.map((alert, index) => (
+                        <AlertItem key={`${type}-${alert.id || index}`} alert={alert} type={type} />
+                      ))
+                    )}
+                  </YStack>
+
+                  <Button
+                    backgroundColor="$orange3"
+                    borderColor="$orange6"
+                    borderWidth={1}
+                    borderRadius="$4"
+                    onPress={onClose}
+                  >
+                    <Text color="$orange11" fontWeight="600">Close</Text>
+                  </Button>
+                </YStack>
+              </ScrollView>
+            </YStack>
+          </TouchableWithoutFeedback>
+        </YStack>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
+
 const DashboardScreen = () => {
   const dispatch = useDispatch<AppDispatch>();
 
   // Auth state
-  const isAuthenticated = useSelector(selectIsAuthenticated);
 
   // Redux state
   const summary = useSelector(selectDashboardSummary);
   const loading = useSelector(selectDashboardLoading);
   const error = useSelector(selectDashboardError);
-  const lastUpdated = useSelector(selectLastUpdated);
+  // const lastUpdated = useSelector(selectLastUpdated);
   
   // Safe selectors that won't throw errors
-  const pendingDelivery = useSelector(selectPendingDelivery);
-  const shopStock = useSelector(selectShopStockSummary);
-  const storeStock = useSelector(selectStoreStockSummary);
+  // const pendingDelivery = useSelector(selectPendingDelivery);
+  // const shopStock = useSelector(selectShopStockSummary);
+  // const storeStock = useSelector(selectStoreStockSummary);
   const stockAlerts = useSelector(selectStockAlerts);
-  const totalSales = useSelector(selectTotalSales);
-  const deliveredItems = useSelector(selectDeliveredItemsCount);
-  const totalPending = useSelector(selectTotalPendingItems);
-  const shopsWithPending = useSelector(selectShopsWithPending);
+  // const totalSales = useSelector(selectTotalSales);
+  // const deliveredItems = useSelector(selectDeliveredItemsCount);
+  // const totalPending = useSelector(selectTotalPendingItems);
+  // const shopsWithPending = useSelector(selectShopsWithPending);
   const totalAlerts = useSelector(selectTotalAlerts);
   const criticalAlerts = useSelector(selectCriticalAlerts);
-  const deliveryPerformance = useSelector(selectDeliveryPerformance);
+  // const deliveryPerformance = useSelector(selectDeliveryPerformance);
   const alertSummary = useSelector(selectAlertSummary);
 
   // Socket hook
@@ -80,38 +289,42 @@ const DashboardScreen = () => {
   // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [, setShowNotificationBadge] = useState(false);
+  const [showNotificationBadge, setShowNotificationBadge] = useState(false);
+  
+  // Modal states
+  const [showExpiredModal, setShowExpiredModal] = useState(false);
+  const [showLowStockModal, setShowLowStockModal] = useState(false);
+  const [showExpiringSoonModal, setShowExpiringSoonModal] = useState(false);
+  
+  // Search states for modals
+  const [expiredSearchQuery, setExpiredSearchQuery] = useState('');
+  const [lowStockSearchQuery, setLowStockSearchQuery] = useState('');
+  const [expiringSoonSearchQuery, setExpiringSoonSearchQuery] = useState('');
 
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!isAuthenticated) {
-      console.log('🔐 User not authenticated, redirecting to login...');
-      router.replace('/(auth)/login' as any);
-    }
-  }, [isAuthenticated]);
+  // Generate unique key for alert items
+  const generateAlertKey = (alert: any, index: number) => {
+    const parts = [
+      alert.id,
+      alert.productId,
+      alert.productCode,
+      alert.batchNumber,
+      alert.locationId,
+      index.toString()
+    ];
+    return parts.filter(Boolean).join('-') || `alert-${Date.now()}-${index}`;
+  };
 
-  // Load dashboard data only when authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      console.log('🔄 Initial dashboard data load...');
-      dispatch(fetchUserDashboardSummary({}));
-    }
-  }, [dispatch, isAuthenticated]);
+ 
 
   // Setup real-time notification listener only when authenticated
   useEffect(() => {
-    if (!isAuthenticated) return;
 
     const handleNewNotification = (notification: Notification) => {
       console.log('📢 Real-time notification received on dashboard:', notification);
       
-      // Add to notifications list
-      setNotifications(prev => [notification, ...prev.slice(0, 9)]); // Keep last 10
-      
-      // Show notification badge
+      setNotifications(prev => [notification, ...prev.slice(0, 9)]);
       setShowNotificationBadge(true);
       
-      // Show alert to user
       Alert.alert(
         '🚨 New Sale Approved!',
         notification.message,
@@ -120,36 +333,28 @@ const DashboardScreen = () => {
             text: 'View', 
             onPress: () => {
               setShowNotificationBadge(false);
-              // Refresh data to show latest pending deliveries
               dispatch(fetchUserDashboardSummary({}));
             }
           },
-        
+          { text: 'Dismiss', style: 'cancel' }
         ]
       );
 
-      // Auto-refresh dashboard data to show updated pending deliveries
       setTimeout(() => {
         dispatch(fetchUserDashboardSummary({}));
       }, 1000);
     };
 
-    // Register notification listener
     onNotification(handleNewNotification);
-
-    // Cleanup is handled by the useSocket hook
-  }, [onNotification, dispatch, isAuthenticated]);
+  }, [onNotification, dispatch]);
 
   // Refresh data when screen comes into focus only when authenticated
   useFocusEffect(
     React.useCallback(() => {
-      if (!isAuthenticated) return;
 
       dispatch(fetchUserDashboardSummary({}));
-      
-      // Clear notification badge when user comes to dashboard
       setShowNotificationBadge(false);
-    }, [dispatch, isAuthenticated])
+    }, [dispatch])
   );
 
   useEffect(() => {
@@ -157,18 +362,6 @@ const DashboardScreen = () => {
       Alert.alert('Error', error);
     }
   }, [error]);
-
-  // Show loading state while checking authentication
-  if (!isAuthenticated) {
-    return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1">
-        <Spinner size="large" color="$orange9" />
-        <Text marginTop="$4" color="$orange11" fontSize="$5" fontWeight="600">
-          Checking authentication...
-        </Text>
-      </YStack>
-    );
-  }
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -186,26 +379,7 @@ const DashboardScreen = () => {
     setShowNotificationBadge(false);
   };
 
-  // Format number with commas
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-US').format(num);
-  };
 
-  // Generate unique key for alert items
-  const generateAlertKey = (alert: any, index: number) => {
-    // Try to use a combination of properties for a unique key
-    const parts = [
-      alert.id,
-      alert.productId,
-      alert.productCode,
-      alert.batchNumber,
-      alert.locationId,
-      index.toString()
-    ];
-    
-    // Filter out falsy values and join with dash
-    return parts.filter(Boolean).join('-') || `alert-${Date.now()}-${index}`;
-  };
 
   // Show empty state when no data after loading
   if (!loading && !refreshing && !summary) {
@@ -248,7 +422,7 @@ const DashboardScreen = () => {
   // Safe data extraction
   const userShopsCount = summary?.userShopsCount || 0;
   const userStoresCount = summary?.userStoresCount || 0;
-  const approvedSalesCount = summary?.approvedSalesCount || 0;
+  // const approvedSalesCount = summary?.approvedSalesCount || 0;
 
   return (
     <YStack flex={1} backgroundColor="$orange1">
@@ -401,7 +575,7 @@ const DashboardScreen = () => {
                   <H4 color="$orange12">⚠️ Alert Summary</H4>
                   
                   <XStack space="$3" flexWrap="wrap" justifyContent="center">
-                    <YStack alignItems="center" padding="$3" backgroundColor="$red2" borderRadius="$3" minWidth={100}>
+                    <YStack alignItems="center" padding="$3" backgroundColor="$red2" borderRadius="$3" minWidth={50}>
                       <Text fontSize="$4" fontWeight="800" color="$red10">
                         ❌ {alertSummary.expired}
                       </Text>
@@ -410,7 +584,7 @@ const DashboardScreen = () => {
                       </Text>
                     </YStack>
                     
-                    <YStack alignItems="center" padding="$3" backgroundColor="$orange2" borderRadius="$3" minWidth={100}>
+                    <YStack alignItems="center" padding="$3" backgroundColor="$orange2" borderRadius="$3" minWidth={50}>
                       <Text fontSize="$4" fontWeight="800" color="$orange10">
                         📉 {alertSummary.lowStock}
                       </Text>
@@ -465,28 +639,7 @@ const DashboardScreen = () => {
                     <H4 color="$red12">❌ Expired Products</H4>
                     
                     {stockAlerts.expiredProducts.slice(0, 5).map((alert, index) => (
-                      <Card 
-                        key={generateAlertKey(alert, index)} 
-                        backgroundColor="$red2" 
-                        padding="$3" 
-                        borderRadius="$3" 
-                        marginVertical="$1"
-                      >
-                        <YStack space="$2">
-                          <Text fontSize="$3" fontWeight="600" color="$red12">
-                            {alert.name || 'Unknown Product'}
-                          </Text>
-                          <Text fontSize="$1" color="$red10">
-                            {alert.locationName || 'Unknown Location'} • {alert.productCode || 'N/A'}
-                          </Text>
-                          <Text fontSize="$1" color="$red10">
-                            Batch: {alert.batchNumber || 'N/A'} • Qty: {formatNumber(alert.quantity || 0)} {alert.unit || 'unit'}
-                          </Text>
-                          <Text fontSize="$1" color="$red10" fontStyle="italic">
-                            Expired: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
-                          </Text>
-                        </YStack>
-                      </Card>
+                      <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expired" />
                     ))}
 
                     {stockAlerts.expiredProducts.length > 5 && (
@@ -496,6 +649,7 @@ const DashboardScreen = () => {
                         borderColor="$red6"
                         borderWidth={1}
                         borderRadius="$3"
+                        onPress={() => setShowExpiredModal(true)}
                       >
                         <Text color="$red11" fontWeight="600">
                           View all {stockAlerts.expiredProducts.length} expired items
@@ -520,38 +674,18 @@ const DashboardScreen = () => {
                   <YStack space="$3">
                     <H4 color="$orange12">📉 Low Stock Products</H4>
                     
-                    {stockAlerts.lowStockProducts.slice(0, 50).map((alert, index) => (
-                      <Card 
-                        key={generateAlertKey(alert, index)} 
-                        backgroundColor="$orange2" 
-                        padding="$3" 
-                        borderRadius="$3" 
-                        marginVertical="$1"
-                      >
-                        <YStack space="$2">
-                          <Text fontSize="$3" fontWeight="600" color="$orange12">
-                            {alert.name || 'Unknown Product'}
-                          </Text>
-                          <Text fontSize="$1" color="$orange10">
-                            {alert.locationName || 'Unknown Location'} • {alert.productCode || 'N/A'}
-                          </Text>
-                          <Text fontSize="$1" color="$orange10">
-                            Batch: {alert.batchNumber || 'N/A'} • Qty: {formatNumber(alert.quantity || 0)} {alert.unit || 'unit'}
-                          </Text>
-                          <Text fontSize="$1" color="$orange10" fontStyle="italic">
-                            Warning at: {formatNumber(alert.warningQuantity || 0)}
-                          </Text>
-                        </YStack>
-                      </Card>
+                    {stockAlerts.lowStockProducts.slice(0, 20).map((alert, index) => (
+                      <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="lowStock" />
                     ))}
 
-                    {stockAlerts.lowStockProducts.length > 50 && (
+                    {stockAlerts.lowStockProducts.length > 20 && (
                       <Button
                         size="$2"
                         backgroundColor="$orange3"
                         borderColor="$orange6"
                         borderWidth={1}
                         borderRadius="$3"
+                        onPress={() => setShowLowStockModal(true)}
                       >
                         <Text color="$orange11" fontWeight="600">
                           View all {stockAlerts.lowStockProducts.length} low stock items
@@ -577,28 +711,7 @@ const DashboardScreen = () => {
                     <H4 color="$yellow12">⏰ Expiring Soon</H4>
                     
                     {stockAlerts.expiringSoonProducts.slice(0, 50).map((alert, index) => (
-                      <Card 
-                        key={generateAlertKey(alert, index)} 
-                        backgroundColor="$yellow2" 
-                        padding="$3" 
-                        borderRadius="$3" 
-                        marginVertical="$1"
-                      >
-                        <YStack space="$2">
-                          <Text fontSize="$3" fontWeight="600" color="$yellow12">
-                            {alert.name || 'Unknown Product'}
-                          </Text>
-                          <Text fontSize="$1" color="$yellow10">
-                            {alert.locationName || 'Unknown Location'} • {alert.productCode || 'N/A'}
-                          </Text>
-                          <Text fontSize="$1" color="$yellow10">
-                            Batch: {alert.batchNumber || 'N/A'} • Qty: {formatNumber(alert.quantity || 0)} {alert.unit || 'unit'}
-                          </Text>
-                          <Text fontSize="$1" color="$yellow10" fontStyle="italic">
-                            Expires: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
-                          </Text>
-                        </YStack>
-                      </Card>
+                      <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expiringSoon" />
                     ))}
 
                     {stockAlerts.expiringSoonProducts.length > 50 && (
@@ -608,6 +721,7 @@ const DashboardScreen = () => {
                         borderColor="$yellow6"
                         borderWidth={1}
                         borderRadius="$3"
+                        onPress={() => setShowExpiringSoonModal(true)}
                       >
                         <Text color="$yellow11" fontWeight="600">
                           View all {stockAlerts.expiringSoonProducts.length} expiring items
@@ -621,6 +735,46 @@ const DashboardScreen = () => {
           </YStack>
         </YStack>
       </ScrollView>
+
+      {/* Full List Modals */}
+      <FullListModal
+        visible={showExpiredModal}
+        onClose={() => {
+          setShowExpiredModal(false);
+          setExpiredSearchQuery('');
+        }}
+        title="❌ All Expired Products"
+        items={stockAlerts.expiredProducts || []}
+        type="expired"
+        searchQuery={expiredSearchQuery}
+        setSearchQuery={setExpiredSearchQuery}
+      />
+
+      <FullListModal
+        visible={showLowStockModal}
+        onClose={() => {
+          setShowLowStockModal(false);
+          setLowStockSearchQuery('');
+        }}
+        title="📉 All Low Stock Products"
+        items={stockAlerts.lowStockProducts || []}
+        type="lowStock"
+        searchQuery={lowStockSearchQuery}
+        setSearchQuery={setLowStockSearchQuery}
+      />
+
+      <FullListModal
+        visible={showExpiringSoonModal}
+        onClose={() => {
+          setShowExpiringSoonModal(false);
+          setExpiringSoonSearchQuery('');
+        }}
+        title="⏰ All Expiring Soon Products"
+        items={stockAlerts.expiringSoonProducts || []}
+        type="expiringSoon"
+        searchQuery={expiringSoonSearchQuery}
+        setSearchQuery={setExpiringSoonSearchQuery}
+      />
     </YStack>
   );
 };

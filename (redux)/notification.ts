@@ -112,7 +112,6 @@ export const useSocketSafe = () => {
     }
 
     return () => {
-      console.log('🧹 useSocketSafe: Cleaning up');
       if (notificationCallbackRef.current) {
         socketService.offNotification(notificationCallbackRef.current);
       }

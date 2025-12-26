@@ -31,7 +31,7 @@ export const fetchUserSellById = createAsyncThunk(
   }
 );
 
-// Define the state interface
+// Define the state interface - UPDATED
 interface UserSellsState {
   sells: Sell[];
   loading: boolean;
@@ -40,13 +40,14 @@ interface UserSellsState {
   filters: {
     startDate?: string;
     endDate?: string;
-    saleStatus?: SaleStatus;
-    itemSaleStatus?: ItemSaleStatus;
+    customerName?: string;
+    salesPersonName?: string;
+    status?: SaleStatus | SaleStatus[] | 'all';
   };
   lastFetchParams?: GetAllSellsUserParams;
-  currentSell: Sell | null; // For storing the currently viewed sell
-  loadingCurrent: boolean; // Separate loading state for single sell
-  errorCurrent: string | null; // Separate error state for single sell
+  currentSell: Sell | null;
+  loadingCurrent: boolean;
+  errorCurrent: string | null;
 }
 
 const initialState: UserSellsState = {
@@ -87,6 +88,20 @@ const userSellsSlice = createSlice({
     },
     clearFilters: (state) => {
       state.filters = {};
+    },
+    // New: Set filter values individually
+    setCustomerNameFilter: (state, action: PayloadAction<string | undefined>) => {
+      state.filters.customerName = action.payload;
+    },
+    setSalesPersonNameFilter: (state, action: PayloadAction<string | undefined>) => {
+      state.filters.salesPersonName = action.payload;
+    },
+    setStatusFilter: (state, action: PayloadAction<SaleStatus | SaleStatus[] | 'all' | undefined>) => {
+      state.filters.status = action.payload;
+    },
+    setDateRangeFilter: (state, action: PayloadAction<{ startDate?: string; endDate?: string }>) => {
+      state.filters.startDate = action.payload.startDate;
+      state.filters.endDate = action.payload.endDate;
     },
     // Set current sell (useful when navigating from list to details)
     setCurrentSell: (state, action: PayloadAction<Sell | null>) => {
@@ -345,6 +360,10 @@ export const {
   setCurrentSell,
   updateFilters,
   clearFilters,
+  setCustomerNameFilter,    // NEW
+  setSalesPersonNameFilter, // NEW
+  setStatusFilter,          // NEW
+  setDateRangeFilter,       // NEW
   updateSellStatus,
   updateSellItemStatus,
   updateSellItemBatches,
@@ -392,6 +411,27 @@ export const selectLastFetchParams = createSelector(
   (state) => state.lastFetchParams
 );
 
+// New selectors for individual filters
+export const selectCustomerNameFilter = createSelector(
+  [selectUserSellsFilters],
+  (filters) => filters.customerName
+);
+
+export const selectSalesPersonNameFilter = createSelector(
+  [selectUserSellsFilters],
+  (filters) => filters.salesPersonName
+);
+
+export const selectStatusFilter = createSelector(
+  [selectUserSellsFilters],
+  (filters) => filters.status
+);
+
+export const selectDateRangeFilter = createSelector(
+  [selectUserSellsFilters],
+  (filters) => ({ startDate: filters.startDate, endDate: filters.endDate })
+);
+
 // Selectors for current sell
 export const selectCurrentSell = createSelector(
   [selectUserSellsState],
@@ -422,7 +462,113 @@ export const selectUserSellById = (sellId: string) =>
     }
   );
 
-// Rest of your selectors remain the same...
+// NEW: Selector for filtered sells based on current filters
+export const selectFilteredUserSells = createSelector(
+  [selectUserSells, selectUserSellsFilters],
+  (sells, filters) => {
+    let filteredSells = [...sells];
+    
+    // Filter by customer name
+    if (filters.customerName) {
+      filteredSells = filteredSells.filter(sell => 
+        sell.customer?.name?.toLowerCase().includes(filters.customerName!.toLowerCase())
+      );
+    }
+    
+    // Filter by salesperson name
+    if (filters.salesPersonName) {
+      filteredSells = filteredSells.filter(sell => 
+        sell.createdBy?.name?.toLowerCase().includes(filters.salesPersonName!.toLowerCase())
+      );
+    }
+    
+    // Filter by status
+    if (filters.status) {
+      if (filters.status === 'all') {
+        // Show all statuses
+      } else if (Array.isArray(filters.status)) {
+        filteredSells = filteredSells.filter(sell => 
+          filters.status!.includes(sell.saleStatus)
+        );
+      } else {
+        filteredSells = filteredSells.filter(sell => 
+          sell.saleStatus === filters.status
+        );
+      }
+    }
+    
+    // Filter by date range
+    if (filters.startDate || filters.endDate) {
+      filteredSells = filteredSells.filter(sell => {
+        const sellDate = new Date(sell.saleDate);
+        if (filters.startDate && filters.endDate) {
+          const start = new Date(filters.startDate);
+          const end = new Date(filters.endDate);
+          return sellDate >= start && sellDate <= end;
+        } else if (filters.startDate) {
+          const start = new Date(filters.startDate);
+          return sellDate >= start;
+        } else if (filters.endDate) {
+          const end = new Date(filters.endDate);
+          return sellDate <= end;
+        }
+        return true;
+      });
+    }
+    
+    return filteredSells;
+  }
+);
+
+// NEW: Selector for filtered sells count
+export const selectFilteredUserSellsCount = createSelector(
+  [selectFilteredUserSells],
+  (filteredSells) => filteredSells.length
+);
+
+// NEW: Selector for customer suggestions based on filter
+export const selectCustomerSuggestions = createSelector(
+  [selectUserSells, selectCustomerNameFilter],
+  (sells, customerNameFilter) => {
+    if (!customerNameFilter || customerNameFilter.length < 2) {
+      return [];
+    }
+    
+    const suggestions = new Set<string>();
+    const searchTerm = customerNameFilter.toLowerCase();
+    
+    sells.forEach(sell => {
+      if (sell.customer?.name?.toLowerCase().includes(searchTerm)) {
+        suggestions.add(sell.customer.name);
+      }
+    });
+    
+    return Array.from(suggestions).slice(0, 10); // Limit to 10 suggestions
+  }
+);
+
+// NEW: Selector for salesperson suggestions based on filter
+export const selectSalesPersonSuggestions = createSelector(
+  [selectUserSells, selectSalesPersonNameFilter],
+  (sells, salesPersonNameFilter) => {
+    if (!salesPersonNameFilter || salesPersonNameFilter.length < 2) {
+      return [];
+    }
+    
+    const suggestions = new Set<string>();
+    const searchTerm = salesPersonNameFilter.toLowerCase();
+    
+    sells.forEach(sell => {
+      if (sell.createdBy?.name?.toLowerCase().includes(searchTerm)) {
+        suggestions.add(sell.createdBy.name);
+      }
+    });
+    
+    return Array.from(suggestions).slice(0, 10); // Limit to 10 suggestions
+  }
+);
+
+// Rest of your existing selectors remain the same...
 export const selectUserSellsByStatus = (status: SaleStatus) => 
   createSelector(
     [selectUserSells],

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Alert,
@@ -40,7 +40,7 @@ import {
 import type { Sell, SellItem, SellItemBatch } from '@/(utils)/types';
 import api from '@/(utils)/config';
 
-const BACKEND_URL = "https://ordere.net";
+// const BACKEND_URL = "https://ordere.net";
 
 // Add lock/unlock API function
 const toggleSellLock = async (id: string, lock: boolean): Promise<void> => {
@@ -57,11 +57,8 @@ const toggleSellLock = async (id: string, lock: boolean): Promise<void> => {
 
     return response.data; // Use response.data instead of response.json()
   } catch (error) {
-    
-   
-      // Something else happened
-      throw error;
-    
+    // Something else happened
+    throw error;
   }
 };
 
@@ -460,16 +457,6 @@ const DateFilterModal = ({
   };
 
   const getQuickFilterButtons = () => [
-    { 
-      label: '📅 Today', 
-      onPress: () => applyQuickFilter(datePresets.today, datePresets.today),
-      description: 'View today\'s sales'
-    },
-    { 
-      label: '📅 Yesterday', 
-      onPress: () => applyQuickFilter(datePresets.yesterday, datePresets.yesterday),
-      description: 'View yesterday\'s sales'
-    },
     { 
       label: '📅 Last 3 Days', 
       onPress: () => applyQuickFilter(datePresets.last3Days, datePresets.current),
@@ -948,10 +935,6 @@ const SellDetailModal = ({
   );
 };
 
-// The rest of your existing imports and functions remain the same...
-// (normalizeImagePath, formatDateForBackend, getDatePresets, DateInput, 
-// DateFilterModal, BatchDetails, SellDetailModal components remain unchanged)
-
 // FIXED OrderScreen with lock/unlock functionality
 export default function OrderScreen() { 
   const dispatch = useDispatch<AppDispatch>();
@@ -976,27 +959,41 @@ export default function OrderScreen() {
   const router = useRouter();
 
   // Check if any filters are active
-  const hasActiveFilters = statusFilter !== 'all' || searchQuery || filters.startDate || filters.endDate;
+  const hasActiveFilters = statusFilter !== 'all' || searchQuery || filters.startDate || filters.endDate || filters.customerName || filters.salesPersonName;
+
+  // Build proper parameters for fetching sells - wrapped in useCallback
+  const buildFetchParams = useCallback(() => {
+    const params: any = {
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      status: filters.status || undefined,
+      salesPersonName: filters.salesPersonName,
+      customerName: filters.customerName,
+    };
+
+    // Remove undefined values
+    Object.keys(params).forEach(key => {
+      if (params[key] === undefined) {
+        delete params[key];
+      }
+    });
+
+    return params;
+  }, [filters]);
 
   // Load sells data
   useEffect(() => {
     console.log('🔄 Initial sales data load...');
-    dispatch(fetchUserSells({
-      startDate: filters.startDate,
-      endDate: filters.endDate,
-      userId: 'current-user-id'
-    }));
-  }, [dispatch, filters]);
+    const params = buildFetchParams();
+    dispatch(fetchUserSells(params));
+  }, [dispatch, buildFetchParams]);
 
   // Refresh sells data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      dispatch(fetchUserSells({
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-        userId: 'current-user-id'
-      }));
-    }, [dispatch, filters])
+      const params = buildFetchParams();
+      dispatch(fetchUserSells(params));
+    }, [dispatch, buildFetchParams])
   );
 
   useEffect(() => {
@@ -1007,16 +1004,29 @@ export default function OrderScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await dispatch(fetchUserSells({
-      startDate: filters.startDate,
-      endDate: filters.endDate,
-      userId: 'current-user-id'
-    }));
+    const params = buildFetchParams();
+    await dispatch(fetchUserSells(params));
     setRefreshing(false);
   };
 
   const handleApplyFilters = (newFilters: { startDate?: string; endDate?: string }) => {
     dispatch(updateFilters(newFilters));
+  };
+
+  // Handle customer name filter change
+  const handleCustomerNameChange = (name: string) => {
+    dispatch(updateFilters({ customerName: name || undefined }));
+  };
+
+  // Handle salesperson name filter change
+  const handleSalesPersonNameChange = (name: string) => {
+    dispatch(updateFilters({ salesPersonName: name || undefined }));
+  };
+
+  // Handle status filter change
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    dispatch(updateFilters({ status: status === 'all' ? undefined : status as any }));
   };
 
   // FIXED: Properly reset all filters
@@ -1060,17 +1070,14 @@ export default function OrderScreen() {
       await toggleSellLock(id, lock);
       
       // Refresh the sells list to get updated data
-      await dispatch(fetchUserSells({
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-        userId: 'current-user-id'
-      }));
+      const params = buildFetchParams();
+      await dispatch(fetchUserSells(params));
       
       Alert.alert(
         'Success',
         `Sell has been ${lock ? 'locked' : 'unlocked'} successfully`
       );
-    } catch (error) {
+    } catch  {
       Alert.alert(
         'Error',
         `Failed to ${lock ? 'lock' : 'unlock'} sell. Please try again.`
@@ -1122,7 +1129,9 @@ export default function OrderScreen() {
     const matchesSearch = searchQuery === '' || 
       sell.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sell.invoiceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      getProductNames(sell).toLowerCase().includes(searchQuery.toLowerCase());
+      getProductNames(sell).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sell.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sell.createdBy?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
@@ -1176,19 +1185,19 @@ export default function OrderScreen() {
   };
 
   // SAFE Helper function to get product display names
-  const getProductDisplayNames = (sell: Sell) => {
-    if (!sell.items || !Array.isArray(sell.items) || sell.items.length === 0) return 'No items';
+  // const getProductDisplayNames = (sell: Sell) => {
+  //   if (!sell.items || !Array.isArray(sell.items) || sell.items.length === 0) return 'No items';
     
-    const productNames = sell.items.map(item => {
-      return item?.product?.name || `Product ${item?.productId?.slice(-8) || 'Unknown'}`;
-    });
+  //   const productNames = sell.items.map(item => {
+  //     return item?.product?.name || `Product ${item?.productId?.slice(-8) || 'Unknown'}`;
+  //   });
     
-    if (productNames.length <= 2) {
-      return productNames.join(', ');
-    } else {
-      return `${productNames.slice(0, 2).join(', ')} +${productNames.length - 2} more`;
-    }
-  };
+  //   if (productNames.length <= 2) {
+  //     return productNames.join(', ');
+  //   } else {
+  //     return `${productNames.slice(0, 2).join(', ')} +${productNames.length - 2} more`;
+  //   }
+  // };
 
   // SAFE Helper function to check if any item has batches
   const hasBatches = (sell: Sell) => {
@@ -1228,7 +1237,7 @@ export default function OrderScreen() {
             <Card.Header padded>
               <YStack space="$3" alignItems="center">
                 <H3 fontWeight="bold" color="$orange12">
-                  📊 My Sales
+                  📊 Orders
                 </H3>
                 
                 {sells.length === 0 ? (
@@ -1238,7 +1247,7 @@ export default function OrderScreen() {
                       No sales found
                     </Text>
                     <Text fontSize="$3" color="$orange9" textAlign="center">
-                      {filters.startDate || filters.endDate 
+                      {filters.startDate || filters.endDate || filters.customerName || filters.salesPersonName || filters.status
                         ? (
                           <Button 
                             onPress={handleResetAllFilters}
@@ -1263,7 +1272,7 @@ export default function OrderScreen() {
                   <YStack space="$3" width="100%">
                     <XStack justifyContent="space-between" width="100%">
                       <Text fontSize="$4" fontWeight="600" color="$orange11">
-                        Total Sales:
+                        Total Orders:
                       </Text>
                       <Text fontSize="$4" fontWeight="700" color="$orange12">
                         {totalCount}
@@ -1327,6 +1336,66 @@ export default function OrderScreen() {
                       backgroundColor="$orange1"
                     />
                   </Fieldset>
+
+                  {/* Customer Name Filter */}
+                  <Fieldset>
+                    <Label htmlFor="customerName" fontSize="$3" fontWeight="600" color="$orange11">
+                      Customer Name
+                    </Label>
+                    <Input
+                      id="customerName"
+                      placeholder="Filter by customer name..."
+                      value={filters.customerName || ''}
+                      onChangeText={handleCustomerNameChange}
+                      borderColor="$orange5"
+                      backgroundColor="$orange1"
+                    />
+                  </Fieldset>
+
+                  {/* Salesperson Name Filter */}
+                  <Fieldset>
+                    <Label htmlFor="salesPersonName" fontSize="$3" fontWeight="600" color="$orange11">
+                      Salesperson Name
+                    </Label>
+                    <Input
+                      id="salesPersonName"
+                      placeholder="Filter by salesperson name..."
+                      value={filters.salesPersonName || ''}
+                      onChangeText={handleSalesPersonNameChange}
+                      borderColor="$orange5"
+                      backgroundColor="$orange1"
+                    />
+                  </Fieldset>
+
+                  {/* Status Filter */}
+                  <Fieldset>
+                    <Label htmlFor="status" fontSize="$3" fontWeight="600" color="$orange11">
+                      Status
+                    </Label>
+                    <XStack space="$2" flexWrap="wrap">
+                      {['all', 'DELIVERED', 'PARTIALLY_DELIVERED', 'APPROVED'].map((status) => (
+                        <Button
+                          key={status}
+                          size="$2"
+                          backgroundColor={statusFilter === status ? "$orange9" : "$orange3"}
+                          borderColor="$orange6"
+                          borderWidth={1}
+                          borderRadius="$3"
+                          onPress={() => handleStatusFilterChange(status)}
+                          pressStyle={{ backgroundColor: statusFilter === status ? "$orange10" : "$orange4" }}
+                        >
+                          <Text 
+                            color={statusFilter === status ? "white" : "$orange11"} 
+                            fontWeight="600" 
+                            fontSize="$2"
+                          >
+                            {status === 'all' ? 'All' : getStatusText(status)}
+                          </Text>
+                        </Button>
+                      ))}
+                    </XStack>
+                  </Fieldset>
+
                   {/* Filter Actions */}
                   <XStack space="$2">
                     <Button
@@ -1368,6 +1437,16 @@ export default function OrderScreen() {
                           {searchQuery && (
                             <Badge backgroundColor="$blue8" size="$1">
                               Search: {searchQuery}
+                            </Badge>
+                          )}
+                          {filters.customerName && (
+                            <Badge backgroundColor="$purple8" size="$1">
+                              Customer: {filters.customerName}
+                            </Badge>
+                          )}
+                          {filters.salesPersonName && (
+                            <Badge backgroundColor="$teal8" size="$1">
+                              Salesperson: {filters.salesPersonName}
                             </Badge>
                           )}
                           {filters.startDate && filters.endDate && (
@@ -1417,12 +1496,28 @@ export default function OrderScreen() {
                           <Text fontSize="$4" fontWeight="700" color="$orange12">
                             {sell.invoiceNo}
                           </Text>
+                      
                           <Text fontSize="$2" color="$orange10">
-                            Order #{sell.id.slice(-8)}
-                          </Text>
-                          <Text fontSize="$2" color="$orange10">
-                            {new Date(sell.saleDate).toLocaleTimeString()}
-                          </Text>
+{new Date(sell.saleDate).toLocaleDateString('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric'
+})} at {new Date(sell.saleDate).toLocaleTimeString('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true
+})}                       </Text>
+                          {/* Customer and Salesperson Info */}
+                          {sell.customer?.name && (
+                            <Text fontSize="$2" color="$orange9">
+                              👤 Customer: {sell.customer.name}
+                            </Text>
+                          )}
+                          {sell.createdBy?.name && (
+                            <Text fontSize="$2" color="$orange9">
+                              👨‍💼 Salesperson: {sell.createdBy.name}
+                            </Text>
+                          )}
                           {/* Lock Status Badge */}
                           {sell.locked && (
                             <Badge backgroundColor="$red9" marginTop="$1" size="$1">
@@ -1454,15 +1549,7 @@ export default function OrderScreen() {
                         </YStack>
                       </XStack>
 
-                      {/* Items Summary */}
-                      <YStack space="$1">
-                        <Text fontSize="$3" fontWeight="600" color="$orange11">
-                          Products:
-                        </Text>
-                        <Text fontSize="$2" color="$orange10" numberOfLines={2}>
-                          {getProductDisplayNames(sell)}
-                        </Text>
-                      </YStack>
+                     
 
                       {/* Totals */}
                       <XStack justifyContent="space-between" alignItems="center">
@@ -1470,7 +1557,7 @@ export default function OrderScreen() {
                           Total:
                         </Text>
                         <Text fontSize="$4" fontWeight="800" color="$green10">
-                          ${sell.grandTotal?.toFixed(2) || '0.00'}
+                          {sell.grandTotal?.toFixed(2) || '0.00'}
                         </Text>
                       </XStack>
 

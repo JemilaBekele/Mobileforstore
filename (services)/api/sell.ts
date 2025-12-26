@@ -6,10 +6,13 @@ export const getAllSellsUser = async (
   params: GetAllSellsUserParams
 ): Promise<GetAllSellsUserResponse> => {
   try {
-        const response = await api.get("/sells/store/getAll", {
+    const response = await api.get("/sells/store/getAll", {
       params: {
         startDate: params.startDate,
         endDate: params.endDate,
+        customerName: params.customerName,
+        salesPersonName: params.salesPersonName,
+        status: params.status,
       }
     });    
     return {

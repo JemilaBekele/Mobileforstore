@@ -157,6 +157,9 @@ export interface Sell {
 }
 
 export interface GetAllSellsUserParams {
+  status: any;
+  salesPersonName: any;
+  customerName: any;
   startDate?: string;
   endDate?: string;
   userId: string;

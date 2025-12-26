@@ -7,12 +7,11 @@ import {
   XStack,
   Text,
   Card,
-  H3,
   H4,
   Button,
   Spinner,
   Input,
-  Image, // Add Image import
+  Image,
 } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -47,7 +46,7 @@ import {
   clearAllDeliveryState,
   resetSuccessState,
 } from '@/(redux)/delivery';
-import type { Sell, SellItem, ProductBatch } from '@/(utils)/types';
+import type {  SellItem, ProductBatch } from '@/(utils)/types';
 
 // Add the normalizeImagePath function
 const BACKEND_URL = "https://ordere.net";
@@ -120,6 +119,33 @@ export default function SellDetailPage() {
     return normalizeImagePath(activeItem.product.imageUrl);
   }, [activeItem]);
 
+  // Calculate available quantity considering already selected batches
+  const getAvailableQuantityForBatch = useMemo(() => (batch: ProductBatch) => {
+    if (!activeItem) return batch.stock || batch.quantity || batch.availableQuantity || 0;
+    
+    const batchStock = batch.stock || batch.quantity || batch.availableQuantity || 0;
+    const selectedBatch = getSelectedBatchesForItem(activeItem.id)
+      .find(b => b.batchId === batch.id);
+    
+    if (selectedBatch) {
+      // If already selected, available = total stock - already selected quantity
+      return Math.max(0, batchStock - selectedBatch.quantity);
+    }
+    
+    return batchStock;
+  }, [activeItem, getSelectedBatchesForItem]);
+
+  // Validate if entered quantity is valid for a batch
+  const isValidQuantity = useMemo(() => (batchId: string, quantity: number) => {
+    if (quantity <= 0) return false;
+    
+    const batch = availableBatches.find(b => b.id === batchId);
+    if (!batch) return false;
+    
+    const availableQuantity = getAvailableQuantityForBatch(batch);
+    return quantity <= availableQuantity;
+  }, [availableBatches, getAvailableQuantityForBatch]);
+
   useEffect(() => {
     if (sellId) {
       dispatch(fetchUserSellById({ id: sellId }));
@@ -180,6 +206,16 @@ export default function SellDetailPage() {
   const handleBatchQuantityChange = (batchId: string, value: string) => {
     // Only allow numeric input
     const numericValue = value.replace(/[^0-9]/g, '');
+    
+    // Don't allow starting with 0 unless it's just 0
+    if (numericValue.length > 1 && numericValue.startsWith('0')) {
+      setBatchQuantities(prev => ({
+        ...prev,
+        [batchId]: numericValue.substring(1),
+      }));
+      return;
+    }
+    
     setBatchQuantities(prev => ({
       ...prev,
       [batchId]: numericValue,
@@ -190,16 +226,28 @@ export default function SellDetailPage() {
     if (!activeItem) return;
     
     const quantity = parseInt(batchQuantities[batch.id] || '0');
+    
     if (quantity <= 0) {
-      Alert.alert('Error', 'Please enter a valid quantity');
+      Alert.alert('Error', 'Please enter a valid quantity greater than 0');
       return;
     }
     
-    // FIX: Use batch.stock instead of batch.quantity
-    const availableQuantity = batch.stock || batch.quantity || 0;
+    // Check if quantity exceeds available stock
+    const availableQuantity = getAvailableQuantityForBatch(batch);
     
     if (quantity > availableQuantity) {
-      Alert.alert('Error', `Maximum available quantity is ${availableQuantity}`);
+      Alert.alert('Insufficient Stock', 
+        `Maximum available quantity is ${availableQuantity} units. ` +
+        `You're trying to allocate ${quantity} units.`);
+      return;
+    }
+    
+    // Check if quantity exceeds remaining needed
+    const remainingNeeded = getRemainingQuantityNeeded;
+    if (quantity > remainingNeeded) {
+      Alert.alert('Quantity Exceeds Need',
+        `Item only needs ${remainingNeeded} more units. ` +
+        `You're trying to allocate ${quantity} units.`);
       return;
     }
     
@@ -210,6 +258,7 @@ export default function SellDetailPage() {
       maxQuantity: availableQuantity,
     }));
     
+    // Clear input for this batch
     setBatchQuantities(prev => ({
       ...prev,
       [batch.id]: '',
@@ -220,11 +269,11 @@ export default function SellDetailPage() {
   const handleAssignAllFromBatch = (batch: ProductBatch) => {
     if (!activeItem) return;
     
-    const availableQuantity = batch.stock || batch.quantity || 0;
+    const availableQuantity = getAvailableQuantityForBatch(batch);
     const remainingNeeded = getRemainingQuantityNeeded;
     
     if (availableQuantity <= 0) {
-      Alert.alert('Error', 'This batch is out of stock');
+      Alert.alert('Error', 'This batch has no available stock');
       return;
     }
     
@@ -255,7 +304,7 @@ export default function SellDetailPage() {
     if (!activeItem) return;
     
     const remainingNeeded = getRemainingQuantityNeeded;
-    const availableQuantity = batch.stock || batch.quantity || 0;
+    const availableQuantity = getAvailableQuantityForBatch(batch);
     
     if (remainingNeeded <= 0) {
       Alert.alert('Info', 'Item is already fully allocated');
@@ -263,7 +312,19 @@ export default function SellDetailPage() {
     }
     
     if (availableQuantity < remainingNeeded) {
-      Alert.alert('Insufficient Stock', `Only ${availableQuantity} units available, need ${remainingNeeded}`);
+      Alert.alert('Insufficient Stock', 
+        `Only ${availableQuantity} units available, but need ${remainingNeeded}. ` +
+        'Will allocate as much as possible.');
+      
+      // Allocate what's available
+      if (availableQuantity > 0) {
+        dispatch(selectBatch({
+          itemId: activeItem.id,
+          batchId: batch.id,
+          quantity: availableQuantity,
+          maxQuantity: availableQuantity,
+        }));
+      }
       return;
     }
     
@@ -296,7 +357,7 @@ export default function SellDetailPage() {
   const prepareDeliveryData = () => {
     if (!sell) return null;
     
-    const items: Array<{ itemId: string; batches: Array<{ batchId: string; quantity: number }> }> = [];
+    const items: { itemId: string; batches: { batchId: string; quantity: number }[] }[] = [];
     
     sell.items?.forEach(item => {
       const selectedBatchesForItem = getSelectedBatchesForItem(item.id);
@@ -674,33 +735,38 @@ export default function SellDetailPage() {
           </Card>
 
           {/* Delivery Action */}
-          {sell.saleStatus === 'APPROVED' && sell.items?.some(item => item.itemSaleStatus === 'PENDING') && (
-            <Card backgroundColor="$green2" padding="$4" borderRadius="$4">
-              <YStack space="$3" alignItems="center">
-                <H4 color="$green12">Ready for Delivery</H4>
-                <Text color="$green11" textAlign="center">
-                  Allocate batches for all items, then submit for delivery.
-                </Text>
-                <Button
-                  size="$4"
-                  backgroundColor="$green9"
-                  borderColor="$green10"
-                  borderWidth={1}
-                  borderRadius="$4"
-                  onPress={handleSubmitDelivery}
-                  disabled={deliveryProcessing}
-                >
-                  {deliveryProcessing ? (
-                    <Spinner size="small" color="white" />
-                  ) : (
-                    <Text color="white" fontWeight="700" fontSize="$4">
-                      Submit Delivery
-                    </Text>
-                  )}
-                </Button>
-              </YStack>
-            </Card>
-          )}
+       {(sell.saleStatus === 'APPROVED' || sell.saleStatus === 'PARTIALLY_DELIVERED') && 
+ sell.items?.some(item => item.itemSaleStatus === 'PENDING') && (
+  <Card backgroundColor="$green2" padding="$4" borderRadius="$4">
+    <YStack space="$3" alignItems="center">
+      <H4 color="$green12">
+        {sell.saleStatus === 'PARTIALLY_DELIVERED' ? 'Continue Delivery' : 'Ready for Delivery'}
+      </H4>
+      <Text color="$green11" textAlign="center">
+        {sell.saleStatus === 'PARTIALLY_DELIVERED' 
+          ? 'Some items are still pending. Allocate remaining batches and submit for delivery.'
+          : 'Allocate batches for all items, then submit for delivery.'}
+      </Text>
+      <Button
+        size="$4"
+        backgroundColor="$green9"
+        borderColor="$green10"
+        borderWidth={1}
+        borderRadius="$4"
+        onPress={handleSubmitDelivery}
+        disabled={deliveryProcessing}
+      >
+        {deliveryProcessing ? (
+          <Spinner size="small" color="white" />
+        ) : (
+          <Text color="white" fontWeight="700" fontSize="$4">
+            {sell.saleStatus === 'PARTIALLY_DELIVERED' ? 'Continue Delivery' : 'Submit Delivery'}
+          </Text>
+        )}
+      </Button>
+    </YStack>
+  </Card>
+)}
 
           {/* Action Buttons */}
           <XStack space="$3">
@@ -837,91 +903,135 @@ export default function SellDetailPage() {
                       ) : (
                         <YStack space="$3">
                           {availableBatches.map((batch) => {
-                            const selected = activeItem && getSelectedBatchesForItem(activeItem.id)
-                              .some(b => b.batchId === batch.id);
-                            const availableQuantity = batch.stock || batch.quantity || batch.availableQuantity || 0;
-                            
-                            return (
-                              <Card key={batch.id} backgroundColor="$orange2" padding="$3" borderRadius="$3">
-                                <YStack space="$3">
-                                  <XStack justifyContent="space-between" alignItems="center">
-                                    <YStack flex={1}>
-                                      <Text fontWeight="700" color="$orange12">
-                                        Batch #{batch.batchNumber || batch.id.slice(-6)}
-                                      </Text>
-                                      <Text fontSize="$2" color="$orange10">
-                                        Expiry: {batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString() : 'N/A'}
-                                      </Text>
-                                    </YStack>
-                                    <Text fontWeight="600" color={availableQuantity > 0 ? "$green10" : "$red10"}>
-                                      {availableQuantity} available
-                                    </Text>
-                                  </XStack>
-                                  
-                                  {selected ? (
-                                    <Card backgroundColor="$green1" padding="$2" borderRadius="$2">
-                                      <Text color="$green11" fontSize="$2" textAlign="center" fontWeight="600">
-                                        ✓ Selected for allocation
-                                      </Text>
-                                    </Card>
-                                  ) : availableQuantity > 0 ? (
-                                    <YStack space="$2">
-                                      {/* Manual Quantity Input */}
-                                      <XStack space="$2" alignItems="center">
-                                        <Input
-                                          flex={1}
-                                          placeholder="Enter quantity"
-                                          value={batchQuantities[batch.id] || ''}
-                                          onChangeText={(value) => handleBatchQuantityChange(batch.id, value)}
-                                          keyboardType="numeric"
-                                          borderColor="$orange5"
-                                          onSubmitEditing={Keyboard.dismiss}
-                                        />
-                                        <Button
-                                          backgroundColor="$blue9"
-                                          onPress={() => handleSelectBatch(batch)}
-                                          disabled={!batchQuantities[batch.id] || parseInt(batchQuantities[batch.id]) <= 0}
-                                        >
-                                          <Text color="white" fontWeight="600">Select</Text>
-                                        </Button>
-                                      </XStack>
-                                      
-                                      {/* Quick Action Buttons */}
-                                      <XStack space="$2">
-                                        <Button
-                                          flex={1}
-                                          backgroundColor="$green3"
-                                          borderColor="$green6"
-                                          onPress={() => handleAssignAllFromBatch(batch)}
-                                        >
-                                          <Text color="$green11" fontWeight="600" fontSize="$2">
-                                            Fill Remaining ({Math.min(availableQuantity, getRemainingQuantityNeeded)})
-                                          </Text>
-                                        </Button>
-                                        <Button
-                                          flex={1}
-                                          backgroundColor="$purple3"
-                                          borderColor="$purple6"
-                                          onPress={() => handleAssignAllRemaining(batch)}
-                                          disabled={availableQuantity < getRemainingQuantityNeeded}
-                                        >
-                                          <Text color="$purple11" fontWeight="600" fontSize="$2">
-                                            All Remaining
-                                          </Text>
-                                        </Button>
-                                      </XStack>
-                                    </YStack>
-                                  ) : (
-                                    <Card backgroundColor="$red1" padding="$2" borderRadius="$2">
-                                      <Text color="$red11" fontSize="$2" textAlign="center">
-                                        Out of stock
-                                      </Text>
-                                    </Card>
-                                  )}
-                                </YStack>
-                              </Card>
-                            );
-                          })}
+  const selected = activeItem && getSelectedBatchesForItem(activeItem.id)
+    .some(b => b.batchId === batch.id);
+  const availableQuantity = getAvailableQuantityForBatch(batch);
+  const enteredQuantity = parseInt(batchQuantities[batch.id] || '0');
+  const isQuantityValid = isValidQuantity(batch.id, enteredQuantity);
+  const remainingNeeded = getRemainingQuantityNeeded;
+  
+  // Check if entered quantity exceeds remaining needed
+  const exceedsRemaining = enteredQuantity > remainingNeeded;
+  
+  return (
+    <Card key={batch.id} backgroundColor="$orange2" padding="$3" borderRadius="$3">
+      <YStack space="$3">
+        <XStack justifyContent="space-between" alignItems="center">
+          <YStack flex={1}>
+            <Text fontWeight="700" color="$orange12">
+              Batch #{batch.batchNumber || batch.id.slice(-6)}
+            </Text>
+            <Text fontSize="$2" color="$orange10">
+              Expiry: {batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString() : 'N/A'}
+            </Text>
+          </YStack>
+          <Text fontWeight="600" color={availableQuantity > 0 ? "$green10" : "$red10"}>
+            {availableQuantity} available
+          </Text>
+        </XStack>
+        
+        {selected ? (
+          <Card backgroundColor="$green1" padding="$2" borderRadius="$2">
+            <Text color="$green11" fontSize="$2" textAlign="center" fontWeight="600">
+              ✓ Selected for allocation
+            </Text>
+          </Card>
+        ) : availableQuantity > 0 ? (
+          <YStack space="$2">
+            {/* Manual Quantity Input with red styling when exceeding */}
+            <YStack space="$1">
+              <Input
+                placeholder={`Enter quantity (max: ${availableQuantity})`}
+                value={batchQuantities[batch.id] || ''}
+                onChangeText={(value) => handleBatchQuantityChange(batch.id, value)}
+                keyboardType="numeric"
+                borderColor={
+                  exceedsRemaining ? "$red8" : 
+                  (isQuantityValid || enteredQuantity === 0) ? "$orange5" : "$red5"
+                }
+                backgroundColor={exceedsRemaining ? "$red1" : "$orange1"}
+                color={exceedsRemaining ? "$red12" : "$orange12"}
+                borderWidth={exceedsRemaining ? 2 : 1}
+                onSubmitEditing={Keyboard.dismiss}
+                onBlur={() => {
+                  // Automatically allocate when user finishes typing
+                  if (enteredQuantity > 0 && isQuantityValid && !exceedsRemaining) {
+                    handleSelectBatch(batch);
+                  } else if (exceedsRemaining) {
+                    Alert.alert(
+                      "Quantity Exceeds Need",
+                      `Only ${remainingNeeded} units remaining needed. ` +
+                      `You entered ${enteredQuantity} units.`
+                    );
+                  }
+                }}
+              />
+              
+              {/* Warning message for exceeding */}
+              {exceedsRemaining && (
+                <Text fontSize="$1" color="$red10" fontWeight="600">
+                  ⚠️ Exceeds remaining needed by {enteredQuantity - remainingNeeded} units
+                </Text>
+              )}
+              
+              {/* Allocate button with conditional styling */}
+              <Button
+                backgroundColor={
+                  exceedsRemaining ? "$red8" : 
+                  enteredQuantity > 0 && isQuantityValid ? "$blue8" : "$gray8"
+                }
+                color="white"
+                onPress={() => {
+                  if (exceedsRemaining) {
+                    Alert.alert(
+                      "Quantity Exceeds Need",
+                      `Only ${remainingNeeded} units remaining needed. ` +
+                      `Please reduce quantity to ${remainingNeeded} or less.`
+                    );
+                  } else if (enteredQuantity > 0 && isQuantityValid) {
+                    handleSelectBatch(batch);
+                  } else if (enteredQuantity > 0) {
+                    Alert.alert(
+                      "Invalid Quantity",
+                      `Maximum available quantity is ${availableQuantity} units.`
+                    );
+                  } else {
+                    Alert.alert("Error", "Please enter a quantity greater than 0");
+                  }
+                }}
+                disabled={exceedsRemaining}
+                opacity={exceedsRemaining ? 0.7 : 1}
+              >
+                {exceedsRemaining ? "Exceeds Allocation" : "Allocate"}
+              </Button>
+            </YStack>
+            
+           
+            
+            {/* Quick Action Button for remaining needed */}
+            {availableQuantity >= remainingNeeded && remainingNeeded > 0 && (
+              <Button
+                backgroundColor="$purple3"
+                borderColor="$purple6"
+                onPress={() => handleAssignAllRemaining(batch)}
+              >
+                <Text color="$purple11" fontWeight="600">
+                  Assign All Remaining Needed 
+                </Text>
+              </Button>
+            )}
+          </YStack>
+        ) : (
+          <Card backgroundColor="$red1" padding="$2" borderRadius="$2">
+            <Text color="$red11" fontSize="$2" textAlign="center">
+              No stock available
+            </Text>
+          </Card>
+        )}
+      </YStack>
+    </Card>
+  );
+})}
                         </YStack>
                       )}
                       
@@ -1005,7 +1115,9 @@ export default function SellDetailPage() {
               <Card backgroundColor="$green1" borderColor="$green4" borderWidth={1} padding="$4" width="85%" maxWidth={400}>
                 <YStack space="$3" alignItems="center">
                   <H4 color="$green12">Delivery Successful! 🎉</H4>
-                 
+                  <Text color="$green11" textAlign="center">
+                    The delivery has been processed successfully.
+                  </Text>
                   <Button
                     backgroundColor="$green9"
                     borderColor="$green10"

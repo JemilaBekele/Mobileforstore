@@ -127,7 +127,7 @@ export default function ProfileInfo() {
 
       // Only make API call if there are changes
       if (Object.keys(updatedData).length > 0) {
-        const result = await dispatch(updateUserByIdAction({
+        await dispatch(updateUserByIdAction({
           userID: user.id,
           updatedData,
         })).unwrap();
@@ -275,7 +275,7 @@ export default function ProfileInfo() {
                     <XStack justifyContent="space-between">
                       <Text color="$orange11" fontSize="$3">Role:</Text>
                       <Text color="$orange12" fontSize="$3" fontWeight="500">
-                        {user?.role?.name || 'N/A'}
+                        {user?.role || 'N/A'}
                       </Text>
                     </XStack>
                     <XStack justifyContent="space-between">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import {  Modal } from 'react-native';
+import { Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch } from 'react-redux';
 import {
@@ -16,10 +16,11 @@ import {
 } from 'tamagui';
 import { useAppSelector } from '@/(redux)/hooks';
 import type { AppDispatch } from '@/(redux)/store';
-import { logout , logoutAction  } from "@/(redux)/authSlice";
+import { logout, logoutAction } from "@/(redux)/authSlice";
 
-type ProfileRoute = 'Profile' | 'Password' ;
-export default function Profile() { 
+type ProfileRoute = 'Profile' | 'Password' | 'Waitlists';
+
+const Profile = () => {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const user = useAppSelector((state) => state.auth.user);
@@ -31,35 +32,35 @@ export default function Profile() {
   // Access user data with proper fallbacks
   const fullName = user?.name || 'Guest';
   const email = user?.email || '';
-  const phone = user?.phone || 'Not provided';
-  const role = user?.role?.name || 'User';
-  const branch = user?.branch?.name || 'Not assigned';
+  const role = user?.role || 'User';
+  const branch = user?.branch;
 
   const handleNavigation = (route: ProfileRoute) => {
-    router.push(`/(tabs)/profile/${route}`);
+    router.push(`/(tabs)/profile/${route}` as any);
   };
 
-const handleLogout = async () => {
-  try {
-    setIsLoggingOut(true);
-    setShowLogoutModal(false);
-    
-    await dispatch(logout()).unwrap();
-    
-    // Completely reset navigation to root
-    router.dismissAll();
-    router.replace("/");
-    
-  } catch (error: any) {
-    console.error("Logout process error:", error);
-    dispatch(logoutAction());
-    router.dismissAll();
-    router.replace("/");
-  } finally {
-    setIsLoggingOut(false);
-  }
-};
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      setShowLogoutModal(false);
+      
+      await dispatch(logout()).unwrap();
+      
+      // Simply replace with the root screen - no dismissAll needed
+      router.replace("/(auth)/login");
+      
+    } catch (error: any) {
+      console.error("Logout process error:", error);
+      dispatch(logoutAction());
+      
+      // Force redirect even if logout fails
+      router.replace("/(auth)/login");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
+  // FIXED: ProfileMenuItem component with proper text wrapping
   const ProfileMenuItem = ({ 
     icon, 
     title, 
@@ -93,6 +94,7 @@ const handleLogout = async () => {
           disabled={isLoggingOut}
         >
           <XStack alignItems="center" space="$3">
+            {/* FIX: Ensure the icon is properly wrapped in Text component */}
             <Text fontSize="$5" color={isDestructive ? "$red9" : "$orange9"}>
               {icon}
             </Text>
@@ -135,6 +137,9 @@ const handleLogout = async () => {
       </YStack>
     );
   }
+
+  const roleValue = typeof role === 'string' ? role : role?.name || 'User';
+  const branchValue = typeof branch === 'string' ? branch : branch?.name || 'Not assigned';
 
   return (
     <YStack flex={1} backgroundColor="$orange1">
@@ -180,11 +185,9 @@ const handleLogout = async () => {
                 >
                   <YStack space="$1">
                     <Separator borderColor="$orange4" />
-                    <UserInfoCard label="Role:" value={role} />
+                    <UserInfoCard label="Role:" value={roleValue} />
+                    <UserInfoCard label="Branch:" value={branchValue} />
                     <Separator borderColor="$orange4" />
-                    <UserInfoCard label="Branch:" value={branch} />
-                    <Separator borderColor="$orange4" />
-                    <UserInfoCard label="Phone:" value={phone} />
                   </YStack>
                 </Card>
               </YStack>
@@ -197,6 +200,7 @@ const handleLogout = async () => {
               Account Settings
             </Text>
 
+            {/* FIX: Updated ProfileMenuItem calls with proper text */}
             <ProfileMenuItem
               icon="👤"
               title="Account Information"
@@ -288,4 +292,4 @@ const handleLogout = async () => {
   );
 };
 
-
+export default Profile;

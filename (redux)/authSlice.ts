@@ -37,6 +37,7 @@ export const fetchUserById = createAsyncThunk("auth/fetchUserById", async (_, { 
     const response = await getUserById();
     return response.user || response; // Handle both response structures
   } catch (error: any) {
+    console.error("Error fetching user:", error);
     return rejectWithValue(error.message || "Failed to fetch user");
   }
 });
@@ -59,6 +60,7 @@ export const updateUserByIdAction = createAsyncThunk(
       
       return updatedUser;
     } catch (error: any) {
+      console.error("Error updating user:", error);
       return rejectWithValue(error.message || "Failed to update user");
     }
   }
@@ -74,6 +76,7 @@ export const changePasswordAction = createAsyncThunk(
       const response = await changePassword(currentPassword, newPassword);
       return response;
     } catch (error: any) {
+      console.error("Change Password Error:", error);
       return rejectWithValue(error.message || "Failed to change password");
     }
   }
@@ -137,10 +140,6 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    setToken: (state, action: PayloadAction<string>) => {
-      state.token = action.payload;
-      state.isAuthenticated = !!(action.payload && state.user);
-    },
     // Synchronous logout action for immediate state clearing
     logoutAction: (state) => {
       state.user = null;
@@ -280,13 +279,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { setToken, logoutAction, clearError, setUser, clearToken, checkAuthStatus } = authSlice.actions;
-
-// Selectors - ADD THESE
-export const selectIsAuthenticated = (state: { auth: AuthState }) => state.auth.isAuthenticated;
-export const selectUser = (state: { auth: AuthState }) => state.auth.user;
-export const selectToken = (state: { auth: AuthState }) => state.auth.token;
-export const selectAuthLoading = (state: { auth: AuthState }) => state.auth.loading;
-export const selectAuthError = (state: { auth: AuthState }) => state.auth.error;
+export const { logoutAction, clearError, setUser, clearToken, checkAuthStatus } = authSlice.actions;
 
 export default authSlice.reducer;

@@ -40,12 +40,11 @@ import {
   selectProductsFilters,
   selectProductsSort,
   selectUserAccessibleShops,
-
   toggleProductActive,
 } from '@/(redux)/product';
 import { AdditionalPrice, BatchStockDetails, Product, Shop } from '@/(services)/api/product';
 
-const BACKEND_URL =  "https://ordere.net";
+const BACKEND_URL = "https://ordere.net";
 
 export const normalizeImagePath = (path?: string) => {
   if (!path) return undefined;
@@ -268,7 +267,21 @@ const BatchExpiryIndicator = ({ batches }: { batches?: BatchStockDetails[] }) =>
   );
 };
 
-// Product Card Component
+// Helper function to get shop stock from branchStocks structure
+const getShopStockFromBranchStocks = (product: Product, shopId?: string): number => {
+  if (!shopId || !product.stockSummary?.branchStocks) return 0;
+  
+  let totalShopStock = 0;
+  // Find shop stock in all branches
+  for (const branchStock of Object.values(product.stockSummary.branchStocks)) {
+    // Check if shops object exists and has the shopId
+    if (branchStock.shops && branchStock.shops[shopId]) {
+      totalShopStock += branchStock.shops[shopId];
+    }
+  }
+  return totalShopStock;
+};
+
 // Product Card Component
 const ProductCard = ({ 
   product, 
@@ -280,7 +293,11 @@ const ProductCard = ({
   selectedShopId?: string;
 }) => {
   const totalStock = product.stockSummary?.totalStock || 0;
-  const shopStock = selectedShopId ? product.stockSummary?.shopStocks[selectedShopId] || 0 : 0;
+  
+  // Calculate shop stock from branchStocks structure
+  const shopStock = React.useMemo(() => {
+    return getShopStockFromBranchStocks(product, selectedShopId);
+  }, [product, selectedShopId]);
   
   // Get normalized image URL
   const productImageUrl = normalizeImagePath(product.imageUrl);
@@ -780,6 +797,7 @@ const SortModal = ({
 };
 
 // Product Detail Modal
+// Product Detail Modal - Updated for actual API structure
 const ProductDetailModal = ({
   product,
   visible,
@@ -796,8 +814,9 @@ const ProductDetailModal = ({
   if (!product) return null;
 
   const totalStock = product.stockSummary?.totalStock || 0;
-  const shopStocks = product.stockSummary?.shopStocks || {};
   const batchDetails = product.stockSummary?.batchStockDetails || [];
+  const shopStocks = product.stockSummary?.shopStocks || {};
+  const storeStocks = product.stockSummary?.storeStocks || {};
 
   return (
     <Modal
@@ -882,7 +901,7 @@ const ProductDetailModal = ({
                 </YStack>
               </Card>
 
-              {/* Stock Summary */}
+              {/* Stock Summary - UPDATED for actual API structure */}
               <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
                 <YStack space="$3">
                   <Text fontWeight="700" color="$orange12" fontSize="$5">
@@ -894,18 +913,19 @@ const ProductDetailModal = ({
                     <StockBadge stock={totalStock} />
                   </XStack>
 
-                  {/* Shop Stocks */}
+                  {/* Shop Stocks - UPDATED */}
                   {Object.keys(shopStocks).length > 0 && (
                     <YStack space="$2">
-                      <Text fontWeight="600" color="$orange11">Stock by Shop:</Text>
-                      {Object.entries(shopStocks).map(([shopId, stock]) => {
-                        const shop = shops.find(s => s.id === shopId);
+                      <Text fontWeight="600" color="$orange11">Shop Stocks:</Text>
+                      {Object.entries(shopStocks).map(([shopName, stock]) => {
+                        // Find shop by name
+                        const shop = shops.find(s => s.name === shopName);
                         return (
-                          <XStack key={shopId} justifyContent="space-between">
-                            <Text color="$orange10" fontSize="$2">
-                              {shop?.name || `Shop ${shopId.slice(-6)}`}:
+                          <XStack key={shopName} justifyContent="space-between">
+                            <Text color="$orange10" fontSize="$1">
+                              {shop?.name || shopName}:
                             </Text>
-                            <Text color="$orange12" fontSize="$2" fontWeight="600">
+                            <Text color="$orange12" fontSize="$1" fontWeight="600">
                               {stock} units
                             </Text>
                           </XStack>
@@ -913,6 +933,41 @@ const ProductDetailModal = ({
                       })}
                     </YStack>
                   )}
+
+                  {/* Store Stocks - UPDATED */}
+                  {Object.keys(storeStocks).length > 0 && (
+                    <YStack space="$2">
+                      <Text fontWeight="600" color="$orange11">Store Stocks:</Text>
+                      {Object.entries(storeStocks).map(([storeName, stock]) => (
+                        <XStack key={storeName} justifyContent="space-between">
+                          <Text color="$orange10" fontSize="$1">
+                            {storeName}:
+                          </Text>
+                          <Text color="$orange12" fontSize="$1" fontWeight="600">
+                            {stock} units
+                          </Text>
+                        </XStack>
+                      ))}
+                    </YStack>
+                  )}
+
+                  {/* Stock Totals */}
+                  <XStack justifyContent="space-between" paddingTop="$2" borderTopWidth={1} borderTopColor="$orange4">
+                    <YStack space="$1">
+                      <XStack justifyContent="space-between">
+                        <Text color="$orange10" fontSize="$1">Total Shop Stock:</Text>
+                        <Text color="$orange12" fontSize="$1" fontWeight="600">
+                          {product.stockSummary?.totalShopStock || 0} units
+                        </Text>
+                      </XStack>
+                      <XStack justifyContent="space-between">
+                        <Text color="$orange10" fontSize="$1">Total Store Stock:</Text>
+                        <Text color="$orange12" fontSize="$1" fontWeight="600">
+                          {product.stockSummary?.totalStoreStock || 0} units
+                        </Text>
+                      </XStack>
+                    </YStack>
+                  </XStack>
                 </YStack>
               </Card>
 
@@ -949,7 +1004,7 @@ const ProductDetailModal = ({
                 </Card>
               )}
 
-              {/* Additional Prices */}
+              {/* Additional Prices
               {product.AdditionalPrice && product.AdditionalPrice.length > 0 && (
                 <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
                   <YStack space="$3">
@@ -971,7 +1026,7 @@ const ProductDetailModal = ({
                     })}
                   </YStack>
                 </Card>
-              )}
+              )} */}
 
               {product.description && (
                 <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
@@ -989,6 +1044,14 @@ const ProductDetailModal = ({
   );
 };
 
+// Helper function to get shop name by ID
+const getShopNameById = (shopId: string, shops: Shop[]): string => {
+  const shop = shops.find(s => s.id === shopId);
+  return shop?.name || shopId;
+};
+
+// Helper function to get shop ID by name
+
 // Main Products Screen
 export default function ProductsScreen() { 
   const dispatch = useDispatch<AppDispatch>();
@@ -1001,7 +1064,6 @@ export default function ProductsScreen() {
   const filters = useSelector(selectProductsFilters);
   const sort = useSelector(selectProductsSort);
   const shops = useSelector(selectUserAccessibleShops);
- 
 
   // Local state
   const [refreshing, setRefreshing] = useState(false);
@@ -1074,13 +1136,17 @@ export default function ProductsScreen() {
 
   // Update shop filter when selected shop changes
   useEffect(() => {
-    dispatch(updateFilters({ shopId: selectedShop }));
+    if (selectedShop) {
+      dispatch(updateFilters({ shopId: selectedShop }));
+    } else {
+      dispatch(updateFilters({ shopId: undefined }));
+    }
   }, [selectedShop, dispatch]);
 
-  const shopOptions = [
-    { value: '', label: 'All shops' },
-    ...shops.map(shop => ({ value: shop.id, label: shop.name }))
-  ];
+  // const shopOptions = [
+  //   { value: '', label: 'All shops' },
+  //   ...shops.map(shop => ({ value: shop.id, label: shop.name }))
+  // ];
 
   if (loading && !refreshing && products.length === 0) {
     return (
@@ -1155,8 +1221,6 @@ export default function ProductsScreen() {
                         {totalCount}
                       </Text>
                     </XStack>
-                    
-                  
                   </YStack>
                 )}
               </YStack>
@@ -1210,7 +1274,7 @@ export default function ProductsScreen() {
                   </Fieldset>
 
                   {/* Shop Selector */}
-                  {shops.length > 0 && (
+                  {/* {shops.length > 0 && (
                     <Fieldset>
                       <Label htmlFor="shopSelect" fontSize="$3" fontWeight="600" color="$orange11">
                         View Shop Stock
@@ -1222,7 +1286,7 @@ export default function ProductsScreen() {
                         placeholder="All shops"
                       />
                     </Fieldset>
-                  )}
+                  )} */}
 
                   {/* Filter Actions */}
                   <XStack space="$2">
@@ -1263,7 +1327,7 @@ export default function ProductsScreen() {
                           )}
                           {filters.shopId && (
                             <Badge backgroundColor="$green8">
-                              Shop: {shops.find(s => s.id === filters.shopId)?.name}
+                              Shop: {getShopNameById(filters.shopId, shops)}
                             </Badge>
                           )}
                           {filters.minStock !== undefined && (
@@ -1293,7 +1357,7 @@ export default function ProductsScreen() {
                         Sorted by: 
                       </Text>
                       <Text fontSize="$2" fontWeight="600" color="$orange12">
-                        {sort.field} ({sort.direction})
+                        {sort.field} 
                       </Text>
                     </XStack>
                   </Card>

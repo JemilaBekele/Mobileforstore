@@ -56,11 +56,9 @@ export const getAvailableBatchesByProductAndShop = async (
   productId: string
 ): Promise<{ success: boolean; batches: ProductBatch[]; count: number }> => {
   try {
-    console.log('🔍 Fetching batches for shopId:', shopId, 'and productId:', productId);
     const response = await api.get(
       `/shops/${shopId}/products/${productId}/batches`
     );
-    console.log('🔍 Batches response:', response.data);
     return {
       success: true,
       batches: response.data.batches || [],

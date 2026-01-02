@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import {
+import React, { useEffect, useState, useMemo } from 'react';
+import { 
   Alert,
   RefreshControl,
   Modal,
@@ -24,25 +23,20 @@ import {
   Switch,
   Progress,
 } from 'tamagui';
-import type { AppDispatch } from '@/(redux)/store';
 import { useFocusEffect } from 'expo-router';
 
-// Redux imports
-import {
-  fetchProductsWithStock,
-  updateFilters,
-  clearFilters,
-  updateSort,
-  selectFilteredAndSortedProducts,
+// Import React Query hooks and types
+import { 
+  useProductsQuery, 
+  useToggleProductActiveMutation,
   selectProductsLoading,
   selectProductsError,
-  selectProductsCount,
-  selectProductsFilters,
-  selectProductsSort,
   selectUserAccessibleShops,
-  toggleProductActive,
-} from '@/(redux)/product';
-import { AdditionalPrice, BatchStockDetails, Product, Shop } from '@/(services)/api/product';
+  Product,
+  Shop,
+  AdditionalPrice,
+  BatchStockDetails,
+} from '@/(services)/api/product';
 
 const BACKEND_URL = "https://ordere.net";
 
@@ -479,10 +473,10 @@ const FilterModal = ({
       categoryId: undefined,
       subCategoryId: undefined,
       isActive: undefined,
-      searchTerm: undefined,
+      searchTerm: '',
       minStock: undefined,
       maxStock: undefined,
-      shopId: undefined,
+      shopId: '',
     };
     setLocalFilters(clearedFilters);
     onApplyFilters(clearedFilters);
@@ -503,8 +497,8 @@ const FilterModal = ({
 
   const statusOptions = [
     { value: '', label: 'All statuses' },
-    { value: 'true', label: 'Active only' },
-    { value: 'false', label: 'Inactive only' },
+    { value: 'active', label: 'Active only' },
+    { value: 'inactive', label: 'Inactive only' },
   ];
 
   return (
@@ -538,6 +532,21 @@ const FilterModal = ({
                   <H4 textAlign="center" color="$orange12">
                     Filter Products
                   </H4>
+
+                  {/* Search */}
+                  <Fieldset>
+                    <Label htmlFor="search" fontSize="$3" fontWeight="600" color="$orange12">
+                      Search
+                    </Label>
+                    <Input
+                      id="search"
+                      value={localFilters.searchTerm || ''}
+                      onChangeText={(text) => updateLocalFilter('searchTerm', text)}
+                      placeholder="Search products..."
+                      borderColor="$orange5"
+                      backgroundColor="white"
+                    />
+                  </Fieldset>
 
                   {/* Stock Range */}
                   <YStack space="$3">
@@ -597,23 +606,30 @@ const FilterModal = ({
                       Status
                     </Label>
                     <CustomSelect
-                      value={localFilters.isActive?.toString() || ''}
-                      onValueChange={(value) => updateLocalFilter('isActive', value === '' ? undefined : value === 'true')}
+                      value={localFilters.isActive || ''}
+                      onValueChange={(value) => updateLocalFilter('isActive', value)}
                       options={statusOptions}
                       placeholder="All statuses"
                     />
                   </Fieldset>
 
                   {/* Active Filters Summary */}
-                  {(localFilters.minStock !== undefined || 
+                  {(localFilters.searchTerm || 
+                    localFilters.minStock !== undefined || 
                     localFilters.maxStock !== undefined || 
                     localFilters.shopId || 
-                    localFilters.isActive !== undefined) && (
+                    localFilters.isActive) && (
                     <Card backgroundColor="$orange2" padding="$3" borderRadius="$3">
                       <Text fontSize="$3" fontWeight="600" color="$orange11">
                         Active Filters:
                       </Text>
                       <YStack space="$1" marginTop="$2">
+                        {localFilters.searchTerm && (
+                          <XStack>
+                            <Text fontSize="$2" color="$orange10">Search: </Text>
+                            <Text fontSize="$2" fontWeight="600" color="$orange12">{localFilters.searchTerm}</Text>
+                          </XStack>
+                        )}
                         {localFilters.minStock !== undefined && (
                           <XStack>
                             <Text fontSize="$2" color="$orange10">Min Stock: </Text>
@@ -634,11 +650,11 @@ const FilterModal = ({
                             </Text>
                           </XStack>
                         )}
-                        {localFilters.isActive !== undefined && (
+                        {localFilters.isActive && (
                           <XStack>
                             <Text fontSize="$2" color="$orange10">Status: </Text>
                             <Text fontSize="$2" fontWeight="600" color="$orange12">
-                              {localFilters.isActive ? 'Active' : 'Inactive'}
+                              {localFilters.isActive === 'active' ? 'Active' : 'Inactive'}
                             </Text>
                           </XStack>
                         )}
@@ -706,6 +722,7 @@ const SortModal = ({
     { value: 'productCode', label: 'Product Code' },
     { value: 'totalStock', label: 'Total Stock' },
     { value: 'price', label: 'Price' },
+    { value: 'createdAt', label: 'Date Created' },
   ];
 
   const directionOptions = [
@@ -797,7 +814,6 @@ const SortModal = ({
 };
 
 // Product Detail Modal
-// Product Detail Modal - Updated for actual API structure
 const ProductDetailModal = ({
   product,
   visible,
@@ -901,7 +917,7 @@ const ProductDetailModal = ({
                 </YStack>
               </Card>
 
-              {/* Stock Summary - UPDATED for actual API structure */}
+              {/* Stock Summary */}
               <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
                 <YStack space="$3">
                   <Text fontWeight="700" color="$orange12" fontSize="$5">
@@ -913,7 +929,7 @@ const ProductDetailModal = ({
                     <StockBadge stock={totalStock} />
                   </XStack>
 
-                  {/* Shop Stocks - UPDATED */}
+                  {/* Shop Stocks */}
                   {Object.keys(shopStocks).length > 0 && (
                     <YStack space="$2">
                       <Text fontWeight="600" color="$orange11">Shop Stocks:</Text>
@@ -934,7 +950,7 @@ const ProductDetailModal = ({
                     </YStack>
                   )}
 
-                  {/* Store Stocks - UPDATED */}
+                  {/* Store Stocks */}
                   {Object.keys(storeStocks).length > 0 && (
                     <YStack space="$2">
                       <Text fontWeight="600" color="$orange11">Store Stocks:</Text>
@@ -1004,30 +1020,6 @@ const ProductDetailModal = ({
                 </Card>
               )}
 
-              {/* Additional Prices
-              {product.AdditionalPrice && product.AdditionalPrice.length > 0 && (
-                <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
-                  <YStack space="$3">
-                    <Text fontWeight="700" color="$orange12" fontSize="$5">
-                      Shop-Specific Prices
-                    </Text>
-                    {product.AdditionalPrice.map((additionalPrice) => {
-                      const shop = shops.find(s => s.id === additionalPrice.shopId);
-                      return (
-                        <XStack key={additionalPrice.id} justifyContent="space-between">
-                          <Text color="$orange10">
-                            {shop?.name || `Shop ${additionalPrice.shopId?.slice(-6) || 'Unknown'}`}:
-                          </Text>
-                          <Text color="$green10" fontWeight="600">
-                            +${additionalPrice.price.toFixed(2)}
-                          </Text>
-                        </XStack>
-                      );
-                    })}
-                  </YStack>
-                </Card>
-              )} */}
-
               {product.description && (
                 <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
                   <YStack space="$2">
@@ -1050,22 +1042,13 @@ const getShopNameById = (shopId: string, shops: Shop[]): string => {
   return shop?.name || shopId;
 };
 
-// Helper function to get shop ID by name
-
 // Main Products Screen
 export default function ProductsScreen() { 
-  const dispatch = useDispatch<AppDispatch>();
+  // React Query hooks - NO FILTERS PASSED TO BACKEND
+  const { data, isLoading, isFetching, error, refetch } = useProductsQuery();
+  const toggleProductMutation = useToggleProductActiveMutation();
 
-  // Redux state
-  const products = useSelector(selectFilteredAndSortedProducts);
-  const loading = useSelector(selectProductsLoading);
-  const error = useSelector(selectProductsError);
-  const totalCount = useSelector(selectProductsCount);
-  const filters = useSelector(selectProductsFilters);
-  const sort = useSelector(selectProductsSort);
-  const shops = useSelector(selectUserAccessibleShops);
-
-  // Local state
+  // Local state for filters and sort
   const [refreshing, setRefreshing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -1073,45 +1056,177 @@ export default function ProductsScreen() {
   const [showSortModal, setShowSortModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedShop, setSelectedShop] = useState<string>('');
+  const [filters, setFilters] = useState({
+    searchTerm: '',
+    minStock: undefined as number | undefined,
+    maxStock: undefined as number | undefined,
+    shopId: '',
+    isActive: '' as 'active' | 'inactive' | '',
+  });
+  const [sortOption, setSortOption] = useState({
+    field: 'name',
+    direction: 'asc' as 'asc' | 'desc',
+  });
 
+  // Process products data
+  const allProducts = data?.products || [];
+  const shops = data?.userAccessibleShops || [];
+  
+  // LOCAL FILTERING AND SORTING
+  const filteredAndSortedProducts = useMemo(() => {
+    let filteredProducts = [...allProducts];
+    
+    // Apply search filter
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
+      filteredProducts = filteredProducts.filter(product =>
+        product.name.toLowerCase().includes(searchLower) ||
+        (product.productCode && product.productCode.toLowerCase().includes(searchLower)) ||
+        (product.generic && product.generic.toLowerCase().includes(searchLower)) ||
+        (product.description && product.description.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Apply stock range filter
+    if (filters.minStock !== undefined) {
+      filteredProducts = filteredProducts.filter(product =>
+        (product.stockSummary?.totalStock || 0) >= filters.minStock!
+      );
+    }
+    
+    if (filters.maxStock !== undefined) {
+      filteredProducts = filteredProducts.filter(product =>
+        (product.stockSummary?.totalStock || 0) <= filters.maxStock!
+      );
+    }
+    
+    // Apply shop filter
+    if (filters.shopId) {
+      filteredProducts = filteredProducts.filter(product => {
+        const shopStock = getShopStockFromBranchStocks(product, filters.shopId);
+        return shopStock > 0;
+      });
+    }
+    
+    // Apply status filter
+    if (filters.isActive === 'active') {
+      filteredProducts = filteredProducts.filter(product => product.isActive);
+    } else if (filters.isActive === 'inactive') {
+      filteredProducts = filteredProducts.filter(product => !product.isActive);
+    }
+    
+    // Apply sorting
+    filteredProducts.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+      
+      switch (sortOption.field) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case 'productCode':
+          aValue = a.productCode || '';
+          bValue = b.productCode || '';
+          break;
+        case 'totalStock':
+          aValue = a.stockSummary?.totalStock || 0;
+          bValue = b.stockSummary?.totalStock || 0;
+          break;
+        case 'price':
+          aValue = parseFloat(a.sellPrice || '0');
+          bValue = parseFloat(b.sellPrice || '0');
+          break;
+        case 'createdAt':
+          aValue = new Date(a.createdAt || 0).getTime();
+          bValue = new Date(b.createdAt || 0).getTime();
+          break;
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+      }
+      
+      if (sortOption.direction === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+    
+    return filteredProducts;
+  }, [allProducts, filters, sortOption]);
+  
+  const totalCount = filteredAndSortedProducts.length;
+  const loading = selectProductsLoading(isLoading, isFetching);
+  const errorMessage = selectProductsError(error);
+  
   // Check if any filters are active
-  const hasActiveFilters = Object.values(filters).some(value => value !== undefined && value !== '');
+  const hasActiveFilters = 
+    filters.searchTerm !== '' ||
+    filters.minStock !== undefined ||
+    filters.maxStock !== undefined ||
+    filters.shopId !== '' ||
+    filters.isActive !== '';
 
-  // Load products data
+  // Load products data on mount
   useEffect(() => {
     console.log('🔄 Initial products data load...');
-    dispatch(fetchProductsWithStock());
-  }, [dispatch]);
+  }, []);
 
   // Refresh products data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      dispatch(fetchProductsWithStock());
-    }, [dispatch])
+      refetch();
+    }, [refetch])
   );
 
   useEffect(() => {
-    if (error) {
-      Alert.alert('Error', error);
+    if (errorMessage) {
+      Alert.alert('Error', errorMessage);
     }
-  }, [error]);
+  }, [errorMessage]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await dispatch(fetchProductsWithStock());
+    await refetch();
     setRefreshing(false);
   };
 
   const handleApplyFilters = (newFilters: any) => {
-    dispatch(updateFilters(newFilters));
+    setFilters({
+      searchTerm: newFilters.searchTerm || '',
+      minStock: newFilters.minStock,
+      maxStock: newFilters.maxStock,
+      shopId: newFilters.shopId || '',
+      isActive: newFilters.isActive || '',
+    });
+    
+    // Update local search query state
+    if (newFilters.searchTerm !== undefined) {
+      setSearchQuery(newFilters.searchTerm || '');
+    }
+    
+    // Update local shop state
+    if (newFilters.shopId !== undefined) {
+      setSelectedShop(newFilters.shopId || '');
+    }
   };
 
   const handleApplySort = (newSort: any) => {
-    dispatch(updateSort(newSort));
+    setSortOption({
+      field: newSort.field || 'name',
+      direction: newSort.direction || 'asc',
+    });
   };
 
   const handleResetAllFilters = () => {
-    dispatch(clearFilters());
+    setFilters({
+      searchTerm: '',
+      minStock: undefined,
+      maxStock: undefined,
+      shopId: '',
+      isActive: '',
+    });
     setSearchQuery('');
     setSelectedShop('');
   };
@@ -1122,33 +1237,30 @@ export default function ProductsScreen() {
   };
 
   const handleToggleActive = (productId: string) => {
-    dispatch(toggleProductActive(productId));
+    toggleProductMutation.mutate(productId);
   };
 
   // Update search filter when search query changes
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      dispatch(updateFilters({ searchTerm: searchQuery }));
+      setFilters(prev => ({
+        ...prev,
+        searchTerm: searchQuery,
+      }));
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, dispatch]);
+  }, [searchQuery]);
 
   // Update shop filter when selected shop changes
   useEffect(() => {
-    if (selectedShop) {
-      dispatch(updateFilters({ shopId: selectedShop }));
-    } else {
-      dispatch(updateFilters({ shopId: undefined }));
-    }
-  }, [selectedShop, dispatch]);
+    setFilters(prev => ({
+      ...prev,
+      shopId: selectedShop,
+    }));
+  }, [selectedShop]);
 
-  // const shopOptions = [
-  //   { value: '', label: 'All shops' },
-  //   ...shops.map(shop => ({ value: shop.id, label: shop.name }))
-  // ];
-
-  if (loading && !refreshing && products.length === 0) {
+  if (loading && !refreshing && allProducts.length === 0) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1">
         <Spinner size="large" color="$orange9" />
@@ -1184,11 +1296,11 @@ export default function ProductsScreen() {
                   📦 Products Inventory
                 </H3>
                 
-                {products.length === 0 ? (
+                {filteredAndSortedProducts.length === 0 ? (
                   <YStack alignItems="center" space="$3" paddingVertical="$4">
                     <Text fontSize="$6" color="$orange9">📦</Text>
                     <Text fontSize="$5" fontWeight="600" color="$orange11" textAlign="center">
-                      No products found
+                      {allProducts.length === 0 ? 'No products available' : 'No products match your filters'}
                     </Text>
                     <Text fontSize="$3" color="$orange9" textAlign="center">
                       {hasActiveFilters ? (
@@ -1207,7 +1319,7 @@ export default function ProductsScreen() {
                           </Text>
                         </Button>
                       ) : (
-                        'Your products will appear here'
+                        allProducts.length === 0 ? 'Add products to get started' : 'Your products will appear here'
                       )}
                     </Text>
                   </YStack>
@@ -1215,10 +1327,10 @@ export default function ProductsScreen() {
                   <YStack space="$3" width="100%">
                     <XStack justifyContent="space-between" width="100%">
                       <Text fontSize="$4" fontWeight="600" color="$orange11">
-                        Total Products:
+                        Showing:
                       </Text>
                       <Text fontSize="$4" fontWeight="700" color="$orange12">
-                        {totalCount}
+                        {totalCount} of {allProducts.length} products
                       </Text>
                     </XStack>
                   </YStack>
@@ -1228,7 +1340,7 @@ export default function ProductsScreen() {
           </Card>
 
           {/* Filters & Search */}
-          {products.length > 0 && (
+          {allProducts.length > 0 && (
             <Card 
               elevate 
               bordered 
@@ -1272,21 +1384,6 @@ export default function ProductsScreen() {
                       backgroundColor="$orange1"
                     />
                   </Fieldset>
-
-                  {/* Shop Selector */}
-                  {/* {shops.length > 0 && (
-                    <Fieldset>
-                      <Label htmlFor="shopSelect" fontSize="$3" fontWeight="600" color="$orange11">
-                        View Shop Stock
-                      </Label>
-                      <CustomSelect
-                        value={selectedShop}
-                        onValueChange={setSelectedShop}
-                        options={shopOptions}
-                        placeholder="All shops"
-                      />
-                    </Fieldset>
-                  )} */}
 
                   {/* Filter Actions */}
                   <XStack space="$2">
@@ -1340,9 +1437,9 @@ export default function ProductsScreen() {
                               Max Stock: {filters.maxStock}
                             </Badge>
                           )}
-                          {filters.isActive !== undefined && (
-                            <Badge backgroundColor={filters.isActive ? '$green8' : '$red8'}>
-                              Status: {filters.isActive ? 'Active' : 'Inactive'}
+                          {filters.isActive && (
+                            <Badge backgroundColor={filters.isActive === 'active' ? '$green8' : '$red8'}>
+                              Status: {filters.isActive === 'active' ? 'Active' : 'Inactive'}
                             </Badge>
                           )}
                         </XStack>
@@ -1357,7 +1454,7 @@ export default function ProductsScreen() {
                         Sorted by: 
                       </Text>
                       <Text fontSize="$2" fontWeight="600" color="$orange12">
-                        {sort.field} 
+                        {sortOption.field} ({sortOption.direction})
                       </Text>
                     </XStack>
                   </Card>
@@ -1368,7 +1465,7 @@ export default function ProductsScreen() {
 
           {/* Products Grid */}
           <YStack space="$3">
-            {products.map((product) => (
+            {filteredAndSortedProducts.map((product) => (
               <ProductCard
                 key={product.id}
                 product={product}
@@ -1394,7 +1491,7 @@ export default function ProductsScreen() {
         visible={showSortModal}
         onClose={() => setShowSortModal(false)}
         onApplySort={handleApplySort}
-        currentSort={sort}
+        currentSort={sortOption}
       />
 
       {/* Product Detail Modal */}

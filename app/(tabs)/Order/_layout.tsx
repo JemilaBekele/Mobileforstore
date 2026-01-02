@@ -10,6 +10,12 @@ const HomeLayout = () => {
                     headerShown: false,
                 }}
             />
+                  <Stack.Screen
+                name="detail"
+                options={{
+                    headerShown: false,
+                }}
+            />
     
         </Stack>
     );

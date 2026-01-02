@@ -1,6 +1,9 @@
+// Import React Query hooks
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from "@/(utils)/config";
+import { useState } from 'react';
 
-// Batch stock organized by branch
+// Define interfaces (same as provided)
 export interface BatchBranchStockDetails {
   shops: { [shopName: string]: number };
   stores: { [storeName: string]: number };
@@ -17,7 +20,6 @@ export interface BatchStockDetails {
   totalStock: number;
 }
 
-// Branch stock structure
 export interface BranchStock {
   branchId: string;
   shops: { [shopName: string]: number };
@@ -27,7 +29,6 @@ export interface BranchStock {
   totalBranchStock: number;
 }
 
-// Overall totals branch structure
 export interface BranchTotal {
   branchId: string;
   shops: { [shopName: string]: number };
@@ -37,7 +38,6 @@ export interface BranchTotal {
   totalBranchStock: number;
 }
 
-// Updated StockSummary interface
 export interface StockSummary {
   storeStocks: object;
   shopStocks: any;
@@ -48,7 +48,6 @@ export interface StockSummary {
   batchStockDetails: BatchStockDetails[];
 }
 
-// Overall totals structure
 export interface OverallTotals {
   branchTotals: { [branchName: string]: BranchTotal };
   totalShopStock: number;
@@ -56,13 +55,11 @@ export interface OverallTotals {
   totalAllStock: number;
 }
 
-// Branch info for shop
 export interface Branch {
   id: string;
   name: string;
 }
 
-// Updated AdditionalPrice with branch info
 export interface AdditionalPrice {
   id: string;
   label: string | null;
@@ -107,12 +104,11 @@ export interface Product {
     base: boolean;
   };
   AdditionalPrice: AdditionalPrice[];
-  batches: any[]; // You can define a more specific type if needed
+  batches: any[];
   stockSummary: StockSummary;
   overallTotals?: OverallTotals;
 }
 
-// Updated Shop interface with branch
 export interface Shop {
   id: string;
   name: string;
@@ -127,8 +123,8 @@ export interface GetAllProductsResponse {
   message?: string;
 }
 
-export const getAllProductsWithStock = async (
-): Promise<GetAllProductsResponse> => {
+// API function to fetch products
+export const getAllProductsWithStock = async (): Promise<GetAllProductsResponse> => {
   try {
     const response = await api.get("/all/Products/stock/employee");
     return {
@@ -137,10 +133,160 @@ export const getAllProductsWithStock = async (
       count: response.data.data.count || 0,
       userAccessibleShops: response.data.data.userAccessibleShops || [],
     };
-
   } catch (error: any) {
     throw new Error(
       error.response?.data?.message || "Failed to fetch products with stock"
     );
   }
+};
+
+// API function to toggle product active status
+export const toggleProductActiveStatus = async (productId: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const response = await api.put(`/products/${productId}/toggle-active`);
+    return {
+      success: true,
+      message: response.data.message || "Product status updated successfully"
+    };
+  } catch (error: any) {
+    throw new Error(
+      error.response?.data?.message || "Failed to toggle product active status"
+    );
+  }
+};
+
+// React Query hooks
+export const useProductsQuery = () => {
+  return useQuery({
+    queryKey: ['products'],
+    queryFn: getAllProductsWithStock,
+  });
+};
+
+export const useToggleProductActiveMutation = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: toggleProductActiveStatus,
+    onSuccess: () => {
+      // Invalidate and refetch products query when mutation succeeds
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+};
+
+// Pure utility functions (not hooks) to replace Redux selectors
+export const filterProducts = (products: Product[], filters: any): Product[] => {
+  let filtered = [...products];
+  
+  if (filters.search) {
+    const searchTerm = filters.search.toLowerCase();
+    filtered = filtered.filter(product => 
+      product.name.toLowerCase().includes(searchTerm) ||
+      product.productCode.toLowerCase().includes(searchTerm) ||
+      product.generic?.toLowerCase().includes(searchTerm)
+    );
+  }
+  
+  if (filters.category) {
+    filtered = filtered.filter(product => product.categoryId === filters.category);
+  }
+  
+  if (filters.status !== undefined) {
+    filtered = filtered.filter(product => product.isActive === filters.status);
+  }
+  
+  return filtered;
+};
+
+export const sortProducts = (products: Product[], sortOption: string): Product[] => {
+  const sorted = [...products];
+  
+  switch (sortOption) {
+    case 'name-asc':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    case 'name-desc':
+      return sorted.sort((a, b) => b.name.localeCompare(a.name));
+    case 'code-asc':
+      return sorted.sort((a, b) => a.productCode.localeCompare(b.productCode));
+    case 'code-desc':
+      return sorted.sort((a, b) => b.productCode.localeCompare(a.productCode));
+    case 'stock-asc':
+      return sorted.sort((a, b) => (a.stockSummary?.totalStock || 0) - (b.stockSummary?.totalStock || 0));
+    case 'stock-desc':
+      return sorted.sort((a, b) => (b.stockSummary?.totalStock || 0) - (a.stockSummary?.totalStock || 0));
+    default:
+      return sorted;
+  }
+};
+
+// Utility functions to replace Redux selectors
+export const selectFilteredAndSortedProducts = (
+  products: Product[], 
+  filters: any, 
+  sortOption: string
+): Product[] => {
+  const filtered = filterProducts(products, filters);
+  const sorted = sortProducts(filtered, sortOption);
+  return sorted;
+};
+
+export const selectProductsCount = (products: Product[]): number => products.length;
+
+export const selectProductsLoading = (isLoading: boolean, isFetching: boolean): boolean => isLoading || isFetching;
+
+export const selectProductsError = (error: Error | null): string | null => error?.message || null;
+
+export const selectUserAccessibleShops = (data: GetAllProductsResponse | undefined): Shop[] => 
+  data?.userAccessibleShops || [];
+
+// Custom hook that combines filtering and sorting (for convenience)
+export const useFilteredAndSortedProducts = (
+  products: Product[], 
+  filters: any, 
+  sortOption: string
+): Product[] => {
+  // This is a custom hook that uses pure functions internally
+  return selectFilteredAndSortedProducts(products, filters, sortOption);
+};
+
+// Hook for managing filter state (optional)
+export const useProductFilters = () => {
+  const [filters, setFilters] = useState<any>({
+    search: '',
+    category: '',
+    status: undefined,
+  });
+  
+  const updateFilters = (newFilters: any) => {
+    setFilters((prev: any) => ({ ...prev, ...newFilters }));
+  };
+  
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      category: '',
+      status: undefined,
+    });
+  };
+  
+  return {
+    filters,
+    updateFilters,
+    clearFilters,
+  };
+};
+
+// Hook for managing sort state (optional)
+export const useProductSort = () => {
+  const [sortOption, setSortOption] = useState<string>('name-asc');
+  
+  const updateSort = (newSortOption: string) => {
+    setSortOption(newSortOption);
+  };
+  
+  return {
+    sortOption,
+    updateSort,
+  };
 };

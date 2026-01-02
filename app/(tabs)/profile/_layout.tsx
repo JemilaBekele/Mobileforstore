@@ -10,12 +10,7 @@ const ProfileLayout = () => {
                     headerShown: false,
                 }}
             />
-            <Stack.Screen
-                name="[itemId]"
-                options={{
-                    headerShown: false,
-                }}
-            />
+        
         </Stack>
     );
 };

@@ -18,7 +18,7 @@ export interface LoginData {
 
 export const loginUser = async (user: LoginData) => {
   try {
-    const response = await apii.post("/login", user);
+    const response = await apii.post("/login/Store/only", user);
     return response.data;
   } catch (error: any) {
     throw new Error(error.response?.data?.message || "Login failed");

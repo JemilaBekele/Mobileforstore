@@ -49,7 +49,7 @@ export default function LoginScreen() {
       setMessageType("success");
       
       setTimeout(() => {
-        router.replace("/(tabs)" as any);
+        router.replace("/(tabs)/home" as any);
       }, 1000);
       
     } catch (error: any) {

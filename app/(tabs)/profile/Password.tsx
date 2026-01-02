@@ -286,26 +286,7 @@ export default function PasswordChange() {
           </YStack>
         </Card>
 
-        {/* Testing Notice */}
-        <Card backgroundColor="$blue2" borderColor="$blue6" padding="$4" marginTop="$4">
-          <YStack space="$2">
-            <Text fontSize="$4" fontWeight="700" color="$blue11">
-              🧪 Testing Mode
-            </Text>
-            <Text fontSize="$2" color="$blue10">
-              • Any password is allowed (no complexity requirements)
-            </Text>
-            <Text fontSize="$2" color="$blue10">
-              • Minimum 1 character passwords work
-            </Text>
-            <Text fontSize="$2" color="$blue10">
-              • Same as current password is allowed
-            </Text>
-            <Text fontSize="$2" color="$blue10" fontStyle="italic">
-              This is for testing purposes only
-            </Text>
-          </YStack>
-        </Card>
+     
       </YStack>
     </ScrollView>
   );

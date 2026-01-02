@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Alert,
   RefreshControl,
@@ -18,42 +17,19 @@ import {
   H4,
   H3,
   H2,
-  // Progress,
   Input,
   Fieldset,
   Label,
 } from 'tamagui';
-import type { AppDispatch } from '@/(redux)/store';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 
-// Redux imports
-import {
-  fetchUserDashboardSummary,
-  selectDashboardSummary,
-  selectDashboardLoading,
-  selectDashboardError,
-  // selectLastUpdated,
-  // selectPendingDelivery,
-  // selectShopStockSummary,
-  // selectStoreStockSummary,
-  selectStockAlerts,
-  // selectTotalSales,
-  // selectDeliveredItemsCount,
-  // selectTotalPendingItems,
-  // selectShopsWithPending,
-  selectTotalAlerts,
-  selectCriticalAlerts,
-  // selectDeliveryPerformance,
-  selectAlertSummary,
-} from '@/(redux)/dashboard';
-
-// Auth imports
-
-// Socket imports
+// React Query imports
 import { useSocketSafe } from '@/(redux)/notification';
 import { Notification } from '@/(services)/socket';
+import { getUserDashboardSummary } from '@/(services)/api/dashboard';
 
-// Format number with commas - Moved to top level
+// Format number with commas
 const formatNumber = (num: number) => {
   return new Intl.NumberFormat('en-US').format(num);
 };
@@ -151,9 +127,9 @@ const FullListModal = ({
       const query = searchQuery.toLowerCase();
       const filtered = items.filter(item => 
         (item.name || '').toLowerCase().includes(query) ||
-        (item.productCode || '').toLowerCase().includes(query) ||  // Fixed: changed from alert to item
-        (item.batchNumber || '').toLowerCase().includes(query) || // Fixed: changed from alert to item
-        (item.locationName || '').toLowerCase().includes(query)   // Fixed: changed from alert to item
+        (item.productCode || '').toLowerCase().includes(query) ||
+        (item.batchNumber || '').toLowerCase().includes(query) ||
+        (item.locationName || '').toLowerCase().includes(query)
       );
       setFilteredItems(filtered);
     }
@@ -219,7 +195,7 @@ const FullListModal = ({
                   {searchQuery && (
                     <Card backgroundColor="$orange2" padding="$2" borderRadius="$2">
                       <Text fontSize="$2" color="$orange11">
-                        Found {filteredItems.length} items matching &quot;{searchQuery}&quot; {/* Fixed: escaped quotes */}
+                        Found {filteredItems.length} items matching &quot;{searchQuery}&quot;
                       </Text>
                     </Card>
                   )}
@@ -259,29 +235,18 @@ const FullListModal = ({
 };
 
 const DashboardScreen = () => {
-  const dispatch = useDispatch<AppDispatch>();
+  const queryClient = useQueryClient();
 
-  // Auth state
-
-  // Redux state
-  const summary = useSelector(selectDashboardSummary);
-  const loading = useSelector(selectDashboardLoading);
-  const error = useSelector(selectDashboardError);
-  // const lastUpdated = useSelector(selectLastUpdated);
-  
-  // Safe selectors that won't throw errors
-  // const pendingDelivery = useSelector(selectPendingDelivery);
-  // const shopStock = useSelector(selectShopStockSummary);
-  // const storeStock = useSelector(selectStoreStockSummary);
-  const stockAlerts = useSelector(selectStockAlerts);
-  // const totalSales = useSelector(selectTotalSales);
-  // const deliveredItems = useSelector(selectDeliveredItemsCount);
-  // const totalPending = useSelector(selectTotalPendingItems);
-  // const shopsWithPending = useSelector(selectShopsWithPending);
-  const totalAlerts = useSelector(selectTotalAlerts);
-  const criticalAlerts = useSelector(selectCriticalAlerts);
-  // const deliveryPerformance = useSelector(selectDeliveryPerformance);
-  const alertSummary = useSelector(selectAlertSummary);
+  // React Query for dashboard data
+  const {
+    data: dashboardData,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: () => getUserDashboardSummary({}),
+  });
 
   // Socket hook
   const { onNotification, isConnected } = useSocketSafe();
@@ -314,11 +279,8 @@ const DashboardScreen = () => {
     return parts.filter(Boolean).join('-') || `alert-${Date.now()}-${index}`;
   };
 
- 
-
-  // Setup real-time notification listener only when authenticated
+  // Setup real-time notification listener
   useEffect(() => {
-
     const handleNewNotification = (notification: Notification) => {
       console.log('📢 Real-time notification received on dashboard:', notification);
       
@@ -333,7 +295,7 @@ const DashboardScreen = () => {
             text: 'View', 
             onPress: () => {
               setShowNotificationBadge(false);
-              dispatch(fetchUserDashboardSummary({}));
+              queryClient.invalidateQueries({ queryKey: ['dashboard'] });
             }
           },
           { text: 'Dismiss', style: 'cancel' }
@@ -341,34 +303,33 @@ const DashboardScreen = () => {
       );
 
       setTimeout(() => {
-        dispatch(fetchUserDashboardSummary({}));
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       }, 1000);
     };
 
     onNotification(handleNewNotification);
-  }, [onNotification, dispatch]);
+  }, [onNotification, queryClient]);
 
-  // Refresh data when screen comes into focus only when authenticated
+  // Refresh data when screen comes into focus
   useFocusEffect(
-    React.useCallback(() => {
-
-      dispatch(fetchUserDashboardSummary({}));
+    useCallback(() => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       setShowNotificationBadge(false);
-    }, [dispatch])
+    }, [queryClient])
   );
 
   useEffect(() => {
     if (error) {
-      Alert.alert('Error', error);
+      Alert.alert('Error', error.message || 'Failed to load dashboard');
     }
   }, [error]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await dispatch(fetchUserDashboardSummary({})).unwrap();
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch {
-      // Error is already handled by the Redux state
+      // Error is already handled by the React Query
     } finally {
       setRefreshing(false);
     }
@@ -379,10 +340,36 @@ const DashboardScreen = () => {
     setShowNotificationBadge(false);
   };
 
-
+  // Extract data from dashboard response
+  const summary = dashboardData || {};
+  
+  // Extract alert summary with safe defaults
+  const alertSummary = summary.alertSummary || {
+    expired: 0,
+    lowStock: 0,
+    expiringSoon: 0
+  };
+  
+  // Extract stock alerts with safe defaults
+  const stockAlerts = summary.stockAlerts || {
+    expiredProducts: [],
+    lowStockProducts: [],
+    expiringSoonProducts: []
+  };
+  
+  // Calculate totals
+  const totalAlerts = (stockAlerts.expiredProducts?.length || 0) +
+                     (stockAlerts.lowStockProducts?.length || 0) +
+                     (stockAlerts.expiringSoonProducts?.length || 0);
+  
+  const criticalAlerts = (stockAlerts.expiredProducts?.length || 0) + 
+                        (stockAlerts.expiringSoonProducts?.length || 0);
+  
+  const userShopsCount = summary.userShopsCount || 0;
+  const userStoresCount = summary.userStoresCount || 0;
 
   // Show empty state when no data after loading
-  if (!loading && !refreshing && !summary) {
+  if (!isLoading && !refreshing && !dashboardData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1" padding="$4">
         <Text fontSize="$8" marginBottom="$4">📊</Text>
@@ -405,7 +392,7 @@ const DashboardScreen = () => {
   }
 
   // Show loading state during initial load
-  if (loading && !refreshing && !summary) {
+  if (isLoading && !refreshing && !dashboardData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1">
         <Spinner size="large" color="$orange9" />
@@ -418,11 +405,6 @@ const DashboardScreen = () => {
       </YStack>
     );
   }
-
-  // Safe data extraction
-  const userShopsCount = summary?.userShopsCount || 0;
-  const userStoresCount = summary?.userStoresCount || 0;
-  // const approvedSalesCount = summary?.approvedSalesCount || 0;
 
   return (
     <YStack flex={1} backgroundColor="$orange1">
@@ -459,35 +441,7 @@ const DashboardScreen = () => {
                   ⚠️ Alerts Dashboard
                 </H2>
                 
-                {/* Quick Stats Row */}
-                <XStack space="$3" flexWrap="wrap" justifyContent="center">
-                  <YStack alignItems="center" padding="$2" minWidth={80}>
-                    <Text fontSize="$4" fontWeight="700" color="$orange12">
-                      🏪 {userShopsCount}
-                    </Text>
-                    <Text fontSize="$1" color="$orange10" textAlign="center">
-                      Shops
-                    </Text>
-                  </YStack>
-                  
-                  <YStack alignItems="center" padding="$2" minWidth={80}>
-                    <Text fontSize="$4" fontWeight="700" color="$orange12">
-                      🏬 {userStoresCount}
-                    </Text>
-                    <Text fontSize="$1" color="$orange10" textAlign="center">
-                      Stores
-                    </Text>
-                  </YStack>
-                  
-                  <YStack alignItems="center" padding="$2" minWidth={80}>
-                    <Text fontSize="$4" fontWeight="700" color="$orange12">
-                      ⚠️ {criticalAlerts}
-                    </Text>
-                    <Text fontSize="$1" color="$orange10" textAlign="center">
-                      Critical Alerts
-                    </Text>
-                  </YStack>
-                </XStack>
+               
               </YStack>
             </Card.Header>
           </Card>
@@ -563,52 +517,53 @@ const DashboardScreen = () => {
           {/* Alerts Content */}
           <YStack space="$4">
             {/* Alert Summary */}
-            <Card 
-              elevate 
-              bordered 
-              borderRadius="$4" 
-              backgroundColor="$orange1"
-              borderColor="$orange4"
-            >
-              <Card.Header padded>
-                <YStack space="$3">
-                  <H4 color="$orange12">⚠️ Alert Summary</H4>
-                  
-                  <XStack space="$3" flexWrap="wrap" justifyContent="center">
-                    <YStack alignItems="center" padding="$3" backgroundColor="$red2" borderRadius="$3" minWidth={50}>
-                      <Text fontSize="$4" fontWeight="800" color="$red10">
-                        ❌ {alertSummary.expired}
-                      </Text>
-                      <Text fontSize="$1" color="$red10" fontWeight="600">
-                        Expired
-                      </Text>
-                    </YStack>
-                    
-                    <YStack alignItems="center" padding="$3" backgroundColor="$orange2" borderRadius="$3" minWidth={50}>
-                      <Text fontSize="$4" fontWeight="800" color="$orange10">
-                        📉 {alertSummary.lowStock}
-                      </Text>
-                      <Text fontSize="$1" color="$orange10" fontWeight="600">
-                        Low Stock
-                      </Text>
-                    </YStack>
-                    
-                    <YStack alignItems="center" padding="$3" backgroundColor="$yellow2" borderRadius="$3" minWidth={100}>
-                      <Text fontSize="$4" fontWeight="800" color="$yellow10">
-                        ⏰ {alertSummary.expiringSoon}
-                      </Text>
-                      <Text fontSize="$1" color="$yellow10" fontWeight="600">
-                        Expiring Soon
-                      </Text>
-                    </YStack>
-                  </XStack>
+            {/* Alert Summary */}
+<Card 
+  elevate 
+  bordered 
+  borderRadius="$4" 
+  backgroundColor="$orange1"
+  borderColor="$orange4"
+>
+  <Card.Header padded>
+    <YStack space="$3">
+      <H4 color="$orange12">⚠️ Alert Summary</H4>
+      
+      <XStack space="$3" flexWrap="wrap" justifyContent="center">
+        <YStack alignItems="center" padding="$3" backgroundColor="$red2" borderRadius="$3" minWidth={50}>
+          <Text fontSize="$4" fontWeight="800" color="$red10">
+            ❌ {stockAlerts.expiredProducts?.length || 0}
+          </Text>
+          <Text fontSize="$1" color="$red10" fontWeight="600">
+            Expired
+          </Text>
+        </YStack>
+        
+        <YStack alignItems="center" padding="$3" backgroundColor="$orange2" borderRadius="$3" minWidth={50}>
+          <Text fontSize="$4" fontWeight="800" color="$orange10">
+            📉 {stockAlerts.lowStockProducts?.length || 0}
+          </Text>
+          <Text fontSize="$1" color="$orange10" fontWeight="600">
+            Low Stock
+          </Text>
+        </YStack>
+        
+        <YStack alignItems="center" padding="$3" backgroundColor="$yellow2" borderRadius="$3" minWidth={100}>
+          <Text fontSize="$4" fontWeight="800" color="$yellow10">
+            ⏰ {stockAlerts.expiringSoonProducts?.length || 0}
+          </Text>
+          <Text fontSize="$1" color="$yellow10" fontWeight="600">
+            Expiring Soon
+          </Text>
+        </YStack>
+      </XStack>
 
-                  <Text fontSize="$2" color="$orange10" textAlign="center">
-                    Total Alerts: {totalAlerts}
-                  </Text>
-                </YStack>
-              </Card.Header>
-            </Card>
+      <Text fontSize="$2" color="$orange10" textAlign="center">
+        Total Alerts: {totalAlerts}
+      </Text>
+    </YStack>
+  </Card.Header>
+</Card>
 
             {/* Show empty state if no alerts */}
             {totalAlerts === 0 && (
@@ -638,7 +593,7 @@ const DashboardScreen = () => {
                   <YStack space="$3">
                     <H4 color="$red12">❌ Expired Products</H4>
                     
-                    {stockAlerts.expiredProducts.slice(0, 5).map((alert, index) => (
+                    {stockAlerts.expiredProducts.slice(0, 5).map((alert: unknown, index: number) => (
                       <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expired" />
                     ))}
 
@@ -674,11 +629,11 @@ const DashboardScreen = () => {
                   <YStack space="$3">
                     <H4 color="$orange12">📉 Low Stock Products</H4>
                     
-                    {stockAlerts.lowStockProducts.slice(0, 20).map((alert, index) => (
+                    {stockAlerts.lowStockProducts.slice(0, 10).map((alert: unknown, index: number) => (
                       <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="lowStock" />
                     ))}
 
-                    {stockAlerts.lowStockProducts.length > 20 && (
+                    {stockAlerts.lowStockProducts.length > 10 && (
                       <Button
                         size="$2"
                         backgroundColor="$orange3"
@@ -710,11 +665,11 @@ const DashboardScreen = () => {
                   <YStack space="$3">
                     <H4 color="$yellow12">⏰ Expiring Soon</H4>
                     
-                    {stockAlerts.expiringSoonProducts.slice(0, 50).map((alert, index) => (
+                    {stockAlerts.expiringSoonProducts.slice(0, 10).map((alert: unknown, index: number) => (
                       <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expiringSoon" />
                     ))}
 
-                    {stockAlerts.expiringSoonProducts.length > 50 && (
+                    {stockAlerts.expiringSoonProducts.length > 10 && (
                       <Button
                         size="$2"
                         backgroundColor="$yellow3"

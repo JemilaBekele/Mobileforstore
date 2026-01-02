@@ -23,7 +23,7 @@
     "@tamagui/lucide-icons": "^1.137.1",
     "@tamagui/react-native-media-driver": "^1.137.1",
     "@tamagui/themes": "^1.137.1",
-    "@tanstack/react-query": "^5.90.7",
+    "@tanstack/react-query": "^5.90.13",
     "axios": "^1.13.2",
     "expo": "~54.0.23",
     "expo-constants": "~18.0.10",
@@ -55,7 +55,8 @@
     "react-redux": "^9.2.0",
     "socket.io-client": "^4.8.1",
     "tamagui": "^1.137.1",
-    "yup": "^1.7.1"
+    "yup": "^1.7.1",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

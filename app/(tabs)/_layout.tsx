@@ -21,7 +21,7 @@ export default function TabLayout() {
         },
       }}>
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
@@ -62,19 +62,7 @@ export default function TabLayout() {
         }}
       />
       
-      <Tabs.Screen
-        name="Cart"
-        options={{
-          title: 'Cart',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              size={20} 
-              name={focused ? "cart" : "cart-outline"} 
-              color={color} 
-            />
-          ),
-        }}
-      />
+    
         
       <Tabs.Screen
         name="profile"

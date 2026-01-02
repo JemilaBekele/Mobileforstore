@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ScrollView,
@@ -23,30 +22,13 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
-import type { AppDispatch, RootState } from '@/(redux)/store';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { SellItem, ProductBatch, DeliveryData } from '@/(utils)/types';
 import {
-  fetchUserSellById,
-  selectCurrentSell,
-  selectCurrentSellLoading,
-  selectCurrentSellError,
-  clearCurrentSell,
-} from '@/(redux)/sell';
-import {
-  fetchAvailableBatches,
-  processPartialSaleDelivery,
-  selectBatch,
-  removeBatchSelection,
-  clearItemBatchSelections,
-  selectAvailableBatches,
-  selectAvailableBatchesLoading,
-  selectAvailableBatchesError,
-  selectPartialDeliveryProcessing,
-  selectPartialDeliverySuccess,
-  selectPartialDeliveryError,
-  clearAllDeliveryState,
-  resetSuccessState,
-} from '@/(redux)/delivery';
-import type {  SellItem, ProductBatch } from '@/(utils)/types';
+  getSellByIdByUser,
+  getAvailableBatchesByProductAndShop,
+  partialSaleDelivery,
+} from '@/(services)/api/sell';
 
 // Add the normalizeImagePath function
 const BACKEND_URL = "https://ordere.net";
@@ -61,27 +43,21 @@ export const normalizeImagePath = (path?: string) => {
   return `${BACKEND_URL}/${cleanPath}`;
 };
 
+interface BatchSelection {
+  batchId: string;
+  quantity: number;
+  maxQuantity: number;
+}
+
+interface SelectedBatches {
+  [itemId: string]: BatchSelection[];
+}
+
 export default function SellDetailPage() {
   const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const { sellId } = useLocalSearchParams<{ sellId: string }>();
-  
-  // Sell details state
-  const sell = useSelector(selectCurrentSell);
-  const loading = useSelector(selectCurrentSellLoading);
-  const sellError = useSelector(selectCurrentSellError);
-  
-  // Delivery state
-  const availableBatches = useSelector(selectAvailableBatches);
-  const batchesLoading = useSelector(selectAvailableBatchesLoading);
-  const batchesError = useSelector(selectAvailableBatchesError);
-  const deliveryProcessing = useSelector(selectPartialDeliveryProcessing);
-  const deliverySuccess = useSelector(selectPartialDeliverySuccess);
-  const deliveryError = useSelector(selectPartialDeliveryError);
-  
-  // Get all selected batches once
-  const selectedBatches = useSelector((state: RootState) => state.sellDelivery.selectedBatches);
   
   // Local state
   const [refreshing, setRefreshing] = useState(false);
@@ -90,6 +66,69 @@ export default function SellDetailPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [batchQuantities, setBatchQuantities] = useState<Record<string, string>>({});
+  const [selectedBatches, setSelectedBatches] = useState<SelectedBatches>({});
+  const [deliverySuccess, setDeliverySuccess] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+
+  // TanStack Query for fetching sell details
+  const {
+    data: sellData,
+    isLoading: loading,
+    error: sellError,
+    refetch: refetchSell,
+  } = useQuery({
+    queryKey: ['sell', sellId],
+    queryFn: () => getSellByIdByUser({
+      id: sellId!,
+      status: undefined,
+      salesPersonName: undefined,
+      customerName: undefined,
+      userId: ''
+    }),
+    enabled: !!sellId,
+  });
+
+  const sell = sellData?.sells?.[0];
+
+  // TanStack Query for fetching available batches
+  const {
+    data: batchesData,
+    isLoading: batchesLoading,
+    error: batchesError,
+    refetch: refetchBatches,
+  } = useQuery({
+    queryKey: ['availableBatches', activeItem?.shopId, activeItem?.productId],
+    queryFn: () => {
+      if (!activeItem?.shopId || !activeItem?.productId) {
+        throw new Error('Missing shop or product information');
+      }
+      return getAvailableBatchesByProductAndShop(activeItem.shopId, activeItem.productId);
+    },
+    enabled: !!activeItem?.shopId && !!activeItem?.productId,
+  });
+
+  const availableBatches = batchesData?.batches || [];
+
+  // TanStack Mutation for partial delivery
+  const partialDeliveryMutation = useMutation({
+    mutationFn: ({ id, deliveryData }: { id: string; deliveryData: DeliveryData }) =>
+      partialSaleDelivery(id, deliveryData),
+    onSuccess: () => {
+      setDeliverySuccess(true);
+      setShowSuccessModal(true);
+      refetchSell();
+      // Invalidate related queries
+      queryClient.invalidateQueries({ queryKey: ['sell', sellId] });
+      // Clear selected batches
+      setSelectedBatches({});
+    },
+    onError: (error: Error) => {
+      setDeliveryError(error.message);
+      Alert.alert('Delivery Error', error.message);
+    },
+  });
+
+  const deliveryProcessing = partialDeliveryMutation.isPending;
 
   // Helper functions
   const getSelectedBatchesForItem = useMemo(() => (itemId: string) => {
@@ -147,41 +186,28 @@ export default function SellDetailPage() {
   }, [availableBatches, getAvailableQuantityForBatch]);
 
   useEffect(() => {
-    if (sellId) {
-      dispatch(fetchUserSellById({ id: sellId }));
-      dispatch(clearAllDeliveryState());
+    if (sellError) {
+      Alert.alert('Error', sellError.message);
     }
-  }, [dispatch, sellId]);
+  }, [sellError]);
 
   useEffect(() => {
-    if (sellError) {
-      Alert.alert('Error', sellError);
-    }
     if (deliveryError) {
       Alert.alert('Delivery Error', deliveryError);
+      setDeliveryError(null);
     }
-  }, [sellError, deliveryError]);
+  }, [deliveryError]);
 
   useEffect(() => {
     if (deliverySuccess) {
       setShowSuccessModal(true);
-      if (sellId) {
-        dispatch(fetchUserSellById({ id: sellId }));
-      }
     }
-  }, [deliverySuccess, dispatch, sellId]);
-
-  useEffect(() => {
-    return () => {
-      dispatch(clearCurrentSell());
-      dispatch(clearAllDeliveryState());
-    };
-  }, [dispatch]);
+  }, [deliverySuccess]);
 
   const handleRefresh = async () => {
     if (!sellId) return;
     setRefreshing(true);
-    await dispatch(fetchUserSellById({ id: sellId }));
+    await refetchSell();
     setRefreshing(false);
   };
 
@@ -196,10 +222,6 @@ export default function SellDetailPage() {
     }
     
     setActiveItem(item);
-    dispatch(fetchAvailableBatches({
-      shopId: item.shopId!,
-      productId: item.productId!,
-    }));
     setShowBatchModal(true);
   };
 
@@ -251,48 +273,38 @@ export default function SellDetailPage() {
       return;
     }
     
-    dispatch(selectBatch({
-      itemId: activeItem.id,
-      batchId: batch.id,
-      quantity,
-      maxQuantity: availableQuantity,
-    }));
+    setSelectedBatches(prev => {
+      const itemBatches = prev[activeItem.id] || [];
+      const existingBatchIndex = itemBatches.findIndex(b => b.batchId === batch.id);
+      
+      if (existingBatchIndex >= 0) {
+        // Update existing batch quantity
+        const updatedBatches = [...itemBatches];
+        updatedBatches[existingBatchIndex] = {
+          ...updatedBatches[existingBatchIndex],
+          quantity: updatedBatches[existingBatchIndex].quantity + quantity,
+        };
+        return {
+          ...prev,
+          [activeItem.id]: updatedBatches,
+        };
+      } else {
+        // Add new batch
+        return {
+          ...prev,
+          [activeItem.id]: [
+            ...itemBatches,
+            {
+              batchId: batch.id,
+              quantity,
+              maxQuantity: availableQuantity,
+            },
+          ],
+        };
+      }
+    });
     
     // Clear input for this batch
-    setBatchQuantities(prev => ({
-      ...prev,
-      [batch.id]: '',
-    }));
-  };
-
-  // Handle assigning all available from this batch
-  const handleAssignAllFromBatch = (batch: ProductBatch) => {
-    if (!activeItem) return;
-    
-    const availableQuantity = getAvailableQuantityForBatch(batch);
-    const remainingNeeded = getRemainingQuantityNeeded;
-    
-    if (availableQuantity <= 0) {
-      Alert.alert('Error', 'This batch has no available stock');
-      return;
-    }
-    
-    // Calculate how much to assign (minimum of available and needed)
-    const quantityToAssign = Math.min(availableQuantity, remainingNeeded);
-    
-    if (quantityToAssign <= 0) {
-      Alert.alert('Info', 'Item is already fully allocated');
-      return;
-    }
-    
-    dispatch(selectBatch({
-      itemId: activeItem.id,
-      batchId: batch.id,
-      quantity: quantityToAssign,
-      maxQuantity: availableQuantity,
-    }));
-    
-    // Clear any input for this batch
     setBatchQuantities(prev => ({
       ...prev,
       [batch.id]: '',
@@ -318,22 +330,66 @@ export default function SellDetailPage() {
       
       // Allocate what's available
       if (availableQuantity > 0) {
-        dispatch(selectBatch({
-          itemId: activeItem.id,
-          batchId: batch.id,
-          quantity: availableQuantity,
-          maxQuantity: availableQuantity,
-        }));
+        setSelectedBatches(prev => {
+          const itemBatches = prev[activeItem.id] || [];
+          const existingBatchIndex = itemBatches.findIndex(b => b.batchId === batch.id);
+          
+          if (existingBatchIndex >= 0) {
+            const updatedBatches = [...itemBatches];
+            updatedBatches[existingBatchIndex] = {
+              ...updatedBatches[existingBatchIndex],
+              quantity: updatedBatches[existingBatchIndex].quantity + availableQuantity,
+            };
+            return {
+              ...prev,
+              [activeItem.id]: updatedBatches,
+            };
+          } else {
+            return {
+              ...prev,
+              [activeItem.id]: [
+                ...itemBatches,
+                {
+                  batchId: batch.id,
+                  quantity: availableQuantity,
+                  maxQuantity: availableQuantity,
+                },
+              ],
+            };
+          }
+        });
       }
       return;
     }
     
-    dispatch(selectBatch({
-      itemId: activeItem.id,
-      batchId: batch.id,
-      quantity: remainingNeeded,
-      maxQuantity: availableQuantity,
-    }));
+    setSelectedBatches(prev => {
+      const itemBatches = prev[activeItem.id] || [];
+      const existingBatchIndex = itemBatches.findIndex(b => b.batchId === batch.id);
+      
+      if (existingBatchIndex >= 0) {
+        const updatedBatches = [...itemBatches];
+        updatedBatches[existingBatchIndex] = {
+          ...updatedBatches[existingBatchIndex],
+          quantity: updatedBatches[existingBatchIndex].quantity + remainingNeeded,
+        };
+        return {
+          ...prev,
+          [activeItem.id]: updatedBatches,
+        };
+      } else {
+        return {
+          ...prev,
+          [activeItem.id]: [
+            ...itemBatches,
+            {
+              batchId: batch.id,
+              quantity: remainingNeeded,
+              maxQuantity: availableQuantity,
+            },
+          ],
+        };
+      }
+    });
     
     // Clear any input for this batch
     setBatchQuantities(prev => ({
@@ -344,17 +400,33 @@ export default function SellDetailPage() {
 
   const handleRemoveBatch = (batchId: string) => {
     if (!activeItem) return;
-    dispatch(removeBatchSelection({
-      itemId: activeItem.id,
-      batchId,
-    }));
+    
+    setSelectedBatches(prev => {
+      const itemBatches = prev[activeItem.id] || [];
+      const updatedBatches = itemBatches.filter(b => b.batchId !== batchId);
+      
+      if (updatedBatches.length === 0) {
+        const newState = { ...prev };
+        delete newState[activeItem.id];
+        return newState;
+      }
+      
+      return {
+        ...prev,
+        [activeItem.id]: updatedBatches,
+      };
+    });
   };
 
   const handleClearItemBatches = (itemId: string) => {
-    dispatch(clearItemBatchSelections(itemId));
+    setSelectedBatches(prev => {
+      const newState = { ...prev };
+      delete newState[itemId];
+      return newState;
+    });
   };
 
-  const prepareDeliveryData = () => {
+  const prepareDeliveryData = (): DeliveryData | null => {
     if (!sell) return null;
     
     const items: { itemId: string; batches: { batchId: string; quantity: number }[] }[] = [];
@@ -415,10 +487,10 @@ export default function SellDetailPage() {
     const deliveryData = prepareDeliveryData();
     if (!deliveryData) return;
     
-    dispatch(processPartialSaleDelivery({
+    partialDeliveryMutation.mutate({
       id: sellId,
       deliveryData,
-    }));
+    });
     setShowConfirmModal(false);
   };
 
@@ -891,7 +963,7 @@ export default function SellDetailPage() {
                       ) : batchesError ? (
                         <Card backgroundColor="$red2" padding="$4" borderRadius="$4">
                           <Text color="$red11" textAlign="center">
-                            Error loading batches: {batchesError}
+                            Error loading batches: {batchesError.message}
                           </Text>
                         </Card>
                       ) : availableBatches.length === 0 ? (
@@ -1123,7 +1195,7 @@ export default function SellDetailPage() {
                     borderColor="$green10"
                     onPress={() => {
                       setShowSuccessModal(false);
-                      dispatch(resetSuccessState());
+                      setDeliverySuccess(false);
                     }}
                     marginTop="$4"
                   >

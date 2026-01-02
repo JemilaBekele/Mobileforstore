@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useState, useCallback, useEffect, useRef } from 'react'; // Add useEffect and useRef
 import {
   Alert,
   RefreshControl,
@@ -21,43 +20,28 @@ import {
   Fieldset,
   Label,
 } from 'tamagui';
-import type { AppDispatch } from '@/(redux)/store';
-import { useFocusEffect, useRouter } from 'expo-router';
-
-// Redux imports
-import {
-  fetchUserSells,
-  updateFilters,
-  clearFilters,
-  selectUserSells,
-  selectUserSellsLoading,
-  selectUserSellsError,
-  selectUserSellsCount,
-  selectUserSellsFilters,
-} from '@/(redux)/sell';
-
-// Import the actual Sell type from your API
-import type { Sell, SellItem, SellItemBatch } from '@/(utils)/types';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/(utils)/config';
+import type { GetAllSellsUserParams, Sell, SellItem, SellItemBatch } from '@/(utils)/types';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { getAllSellsUser } from '@/(services)/api/sell';
 
-// const BACKEND_URL = "https://ordere.net";
+// Import the API function
 
 // Add lock/unlock API function
 const toggleSellLock = async (id: string, lock: boolean): Promise<void> => {
   try {
     const response = await api.patch(
       `/sells/With/Lock/${id}`,
-      { locked: lock } // Send the lock status in request body
+      { locked: lock }
     );
     
-    // With axios, we check response status instead of response.ok
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`Failed to ${lock ? 'lock' : 'unlock'} sell`);
     }
 
-    return response.data; // Use response.data instead of response.json()
+    return response.data;
   } catch (error) {
-    // Something else happened
     throw error;
   }
 };
@@ -71,7 +55,7 @@ const ConfirmationModal = ({
   message,
   confirmText,
   cancelText = 'Cancel',
-  type = 'warning', // 'warning', 'danger', 'info'
+  type = 'warning',
 }: {
   visible: boolean;
   onClose: () => void;
@@ -172,9 +156,9 @@ const ConfirmationModal = ({
     </Modal>
   );
 };
+
 // Date utility functions
 const formatDateForBackend = (date: Date): string => {
-  // Format: YYYY-MM-DD (ISO 8601 format - professional standard for APIs)
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -214,8 +198,6 @@ const getDatePresets = () => {
     current: formatDateForBackend(today),
   };
 };
-
-
 
 // Enhanced Date Input Component with Validation
 const DateInput = ({ 
@@ -417,7 +399,6 @@ const DateFilterModal = ({
   const datePresets = getDatePresets();
 
   const handleApply = () => {
-    // Validate date range
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -634,6 +615,7 @@ const DateFilterModal = ({
     </Modal>
   );
 };
+
 const BatchDetails = ({ batches }: { batches: SellItemBatch[] }) => {
   const [showDetails, setShowDetails] = useState(false);
 
@@ -683,7 +665,7 @@ const BatchDetails = ({ batches }: { batches: SellItemBatch[] }) => {
     </YStack>
   );
 };
-// Add missing SellDetailModal component (placeholder)
+
 const SellDetailModal = ({
   sell,
   visible,
@@ -731,22 +713,18 @@ const SellDetailModal = ({
     }
   };
 
-  // SAFE Helper function to get product name from sell item
   const getProductName = (item: SellItem) => {
     return item?.product?.name || `Product ${item?.productId?.slice(-8) || 'Unknown'}`;
   };
 
-  // SAFE Helper function to get shop name
   const getShopName = (item: SellItem) => {
     return item?.shop?.name || 'Unknown Shop';
   };
 
-  // SAFE Helper function to get unit of measure
   const getUnitOfMeasure = (item: SellItem) => {
     return item?.unitOfMeasure?.name || item?.unitOfMeasure?.symbol || 'unit';
   };
 
-  // SAFE Helper function to get item batches
   const getItemBatches = (item: SellItem) => {
     return item?.batches || [];
   };
@@ -881,7 +859,7 @@ const SellDetailModal = ({
                           </Text>
                         </YStack>
                         <Text fontWeight="600" color="$orange12">
-                          ${item?.totalPrice?.toFixed(2) || '0.00'}
+                          {item?.totalPrice?.toFixed(2) || '0.00'}
                         </Text>
                       </XStack>
                     </YStack>
@@ -894,26 +872,26 @@ const SellDetailModal = ({
                 <YStack space="$2">
                   <XStack justifyContent="space-between">
                     <Text color="$orange11">Subtotal:</Text>
-                    <Text color="$orange12">${sell.subTotal?.toFixed(2) || '0.00'}</Text>
+                    <Text color="$orange12">{sell.subTotal?.toFixed(2) || '0.00'}</Text>
                   </XStack>
                   <XStack justifyContent="space-between">
                     <Text color="$orange11">Discount:</Text>
-                    <Text color="$red10">-${sell.discount?.toFixed(2) || '0.00'}</Text>
+                    <Text color="$red10">-{sell.discount?.toFixed(2) || '0.00'}</Text>
                   </XStack>
                   <XStack justifyContent="space-between">
                     <Text color="$orange11">VAT:</Text>
-                    <Text color="$orange12">${sell.vat?.toFixed(2) || '0.00'}</Text>
+                    <Text color="$orange12">{sell.vat?.toFixed(2) || '0.00'}</Text>
                   </XStack>
                   <XStack justifyContent="space-between" borderTopWidth={1} borderTopColor="$orange4" paddingTop="$2">
                     <Text fontWeight="700" color="$orange12" fontSize="$5">Grand Total:</Text>
                     <Text fontWeight="700" color="$green10" fontSize="$5">
-                      ${sell.grandTotal?.toFixed(2) || '0.00'}
+                      {sell.grandTotal?.toFixed(2) || '0.00'}
                     </Text>
                   </XStack>
                   {sell.NetTotal && (
                     <XStack justifyContent="space-between">
                       <Text color="$orange11">Net Total:</Text>
-                      <Text color="$orange12">${sell.NetTotal.toFixed(2)}</Text>
+                      <Text color="$orange12">{sell.NetTotal.toFixed(2)}</Text>
                     </XStack>
                   )}
                 </YStack>
@@ -935,106 +913,179 @@ const SellDetailModal = ({
   );
 };
 
-// FIXED OrderScreen with lock/unlock functionality
 export default function OrderScreen() { 
-  const dispatch = useDispatch<AppDispatch>();
+  const queryClient = useQueryClient();
+  const router = useRouter();
 
-  // Redux state
-  const sells = useSelector(selectUserSells);
-  const loading = useSelector(selectUserSellsLoading);
-  const error = useSelector(selectUserSellsError);
-  const totalCount = useSelector(selectUserSellsCount);
-  const filters = useSelector(selectUserSellsFilters);
-
-  // Local state
+  // Local state for filters
+  const [filters, setFilters] = useState<GetAllSellsUserParams>({} as GetAllSellsUserParams);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSell, setSelectedSell] = useState<Sell | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [sellToUnlock, setSellToUnlock] = useState<Sell | null>(null);
   const [processingLock, setProcessingLock] = useState<string | null>(null);
-  const router = useRouter();
+  
+  // Add debounced states for search inputs
+  const [searchQuery, setSearchQuery] = useState('');
+  const [customerNameInput, setCustomerNameInput] = useState('');
+  const [salesPersonNameInput, setSalesPersonNameInput] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  
+  // Add refs for debouncing
+  const customerNameTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const salesPersonTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // React Query for fetching sells
+  const {
+    data: sellsData,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['sells', filters],         
+    queryFn: () => getAllSellsUser(filters),
+  });
+
+  const sells = sellsData?.sells || [];
+  const totalCount = sellsData?.count || 0;
+
+  // Mutation for lock/unlock
+  const lockMutation = useMutation({
+    mutationFn: ({ id, lock }: { id: string; lock: boolean }) => toggleSellLock(id, lock),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sells'] });
+    },
+  });
+
+  // Debounced customer name handler
+  useEffect(() => {
+    if (customerNameTimeoutRef.current) {
+      clearTimeout(customerNameTimeoutRef.current);
+    }
+
+    customerNameTimeoutRef.current = setTimeout(() => {
+      setFilters(prev => ({ 
+        ...prev, 
+        customerName: customerNameInput.trim() || undefined 
+      }));
+    }, 500); // 500ms delay
+
+    return () => {
+      if (customerNameTimeoutRef.current) {
+        clearTimeout(customerNameTimeoutRef.current);
+      }
+    };
+  }, [customerNameInput]);
+
+  // Debounced salesperson name handler
+  useEffect(() => {
+    if (salesPersonTimeoutRef.current) {
+      clearTimeout(salesPersonTimeoutRef.current);
+    }
+
+    salesPersonTimeoutRef.current = setTimeout(() => {
+      setFilters(prev => ({ 
+        ...prev, 
+        salesPersonName: salesPersonNameInput.trim() || undefined 
+      }));
+    }, 500); // 500ms delay
+
+    return () => {
+      if (salesPersonTimeoutRef.current) {
+        clearTimeout(salesPersonTimeoutRef.current);
+      }
+    };
+  }, [salesPersonNameInput]);
+
+  // Debounced search handler
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+    }, 300); // 300ms delay for search
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchInput]);
 
   // Check if any filters are active
-  const hasActiveFilters = statusFilter !== 'all' || searchQuery || filters.startDate || filters.endDate || filters.customerName || filters.salesPersonName;
-
-  // Build proper parameters for fetching sells - wrapped in useCallback
-  const buildFetchParams = useCallback(() => {
-    const params: any = {
-      startDate: filters.startDate,
-      endDate: filters.endDate,
-      status: filters.status || undefined,
-      salesPersonName: filters.salesPersonName,
-      customerName: filters.customerName,
-    };
-
-    // Remove undefined values
-    Object.keys(params).forEach(key => {
-      if (params[key] === undefined) {
-        delete params[key];
-      }
-    });
-
-    return params;
-  }, [filters]);
-
-  // Load sells data
-  useEffect(() => {
-    console.log('🔄 Initial sales data load...');
-    const params = buildFetchParams();
-    dispatch(fetchUserSells(params));
-  }, [dispatch, buildFetchParams]);
+  const hasActiveFilters = statusFilter !== 'all' || searchQuery || customerNameInput || salesPersonNameInput || filters.startDate || filters.endDate;
 
   // Refresh sells data when screen comes into focus
   useFocusEffect(
-    React.useCallback(() => {
-      const params = buildFetchParams();
-      dispatch(fetchUserSells(params));
-    }, [dispatch, buildFetchParams])
+    useCallback(() => {
+      refetch();
+    }, [refetch])
   );
 
-  useEffect(() => {
+  // Handle errors
+  React.useEffect(() => {
     if (error) {
-      Alert.alert('Error', error);
+      Alert.alert('Error', error.message || 'Failed to fetch sales');
     }
   }, [error]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    const params = buildFetchParams();
-    await dispatch(fetchUserSells(params));
+    await refetch();
     setRefreshing(false);
   };
 
   const handleApplyFilters = (newFilters: { startDate?: string; endDate?: string }) => {
-    dispatch(updateFilters(newFilters));
+    setFilters(prev => ({ ...prev, ...newFilters }));
   };
 
-  // Handle customer name filter change
+  // Handle customer name filter change - update local state only
   const handleCustomerNameChange = (name: string) => {
-    dispatch(updateFilters({ customerName: name || undefined }));
+    setCustomerNameInput(name);
   };
 
-  // Handle salesperson name filter change
+  // Handle salesperson name filter change - update local state only
   const handleSalesPersonNameChange = (name: string) => {
-    dispatch(updateFilters({ salesPersonName: name || undefined }));
+    setSalesPersonNameInput(name);
+  };
+
+  // Handle search input change - update local state only
+  const handleSearchChange = (text: string) => {
+    setSearchInput(text);
   };
 
   // Handle status filter change
   const handleStatusFilterChange = (status: string) => {
     setStatusFilter(status);
-    dispatch(updateFilters({ status: status === 'all' ? undefined : status as any }));
+    setFilters(prev => ({ ...prev, status: status === 'all' ? undefined : status as any }));
   };
 
-  // FIXED: Properly reset all filters
+  // Reset all filters
   const handleResetAllFilters = () => {
-    dispatch(clearFilters());
+    setFilters({} as GetAllSellsUserParams);
     setStatusFilter('all');
     setSearchQuery('');
+    setSearchInput('');
+    setCustomerNameInput('');
+    setSalesPersonNameInput('');
     setShowFilterModal(false);
+    
+    // Clear any pending timeouts
+    if (customerNameTimeoutRef.current) {
+      clearTimeout(customerNameTimeoutRef.current);
+    }
+    if (salesPersonTimeoutRef.current) {
+      clearTimeout(salesPersonTimeoutRef.current);
+    }
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
     
     Alert.alert('Filters Reset', 'All filters have been cleared');
   };
@@ -1047,11 +1098,9 @@ export default function OrderScreen() {
   // Lock/Unlock functionality
   const handleLockToggle = async (sell: Sell) => {
     if (sell.locked) {
-      // Show confirmation before unlocking
       setSellToUnlock(sell);
       setShowConfirmationModal(true);
     } else {
-      // Lock immediately
       await handleLockAction(sell.id, true);
     }
   };
@@ -1067,17 +1116,12 @@ export default function OrderScreen() {
   const handleLockAction = async (id: string, lock: boolean) => {
     setProcessingLock(id);
     try {
-      await toggleSellLock(id, lock);
-      
-      // Refresh the sells list to get updated data
-      const params = buildFetchParams();
-      await dispatch(fetchUserSells(params));
-      
+      await lockMutation.mutateAsync({ id, lock });
       Alert.alert(
         'Success',
         `Sell has been ${lock ? 'locked' : 'unlocked'} successfully`
       );
-    } catch  {
+    } catch (error) {
       Alert.alert(
         'Error',
         `Failed to ${lock ? 'lock' : 'unlock'} sell. Please try again.`
@@ -1184,27 +1228,12 @@ export default function OrderScreen() {
     }
   };
 
-  // SAFE Helper function to get product display names
-  // const getProductDisplayNames = (sell: Sell) => {
-  //   if (!sell.items || !Array.isArray(sell.items) || sell.items.length === 0) return 'No items';
-    
-  //   const productNames = sell.items.map(item => {
-  //     return item?.product?.name || `Product ${item?.productId?.slice(-8) || 'Unknown'}`;
-  //   });
-    
-  //   if (productNames.length <= 2) {
-  //     return productNames.join(', ');
-  //   } else {
-  //     return `${productNames.slice(0, 2).join(', ')} +${productNames.length - 2} more`;
-  //   }
-  // };
-
   // SAFE Helper function to check if any item has batches
   const hasBatches = (sell: Sell) => {
     return sell.items?.some(item => item?.batches && item.batches.length > 0) || false;
   };
 
-  if (loading && !refreshing && sells.length === 0) {
+  if (isLoading && !refreshing && sells.length === 0) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1">
         <Spinner size="large" color="$orange9" />
@@ -1247,7 +1276,7 @@ export default function OrderScreen() {
                       No sales found
                     </Text>
                     <Text fontSize="$3" color="$orange9" textAlign="center">
-                      {filters.startDate || filters.endDate || filters.customerName || filters.salesPersonName || filters.status
+                      {filters.startDate || filters.endDate || customerNameInput || salesPersonNameInput || filters.status
                         ? (
                           <Button 
                             onPress={handleResetAllFilters}
@@ -1330,8 +1359,8 @@ export default function OrderScreen() {
                     <Input
                       id="search"
                       placeholder="Search by order ID, invoice, or product..."
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
+                      value={searchInput}
+                      onChangeText={handleSearchChange}
                       borderColor="$orange5"
                       backgroundColor="$orange1"
                     />
@@ -1345,7 +1374,7 @@ export default function OrderScreen() {
                     <Input
                       id="customerName"
                       placeholder="Filter by customer name..."
-                      value={filters.customerName || ''}
+                      value={customerNameInput}
                       onChangeText={handleCustomerNameChange}
                       borderColor="$orange5"
                       backgroundColor="$orange1"
@@ -1360,7 +1389,7 @@ export default function OrderScreen() {
                     <Input
                       id="salesPersonName"
                       placeholder="Filter by salesperson name..."
-                      value={filters.salesPersonName || ''}
+                      value={salesPersonNameInput}
                       onChangeText={handleSalesPersonNameChange}
                       borderColor="$orange5"
                       backgroundColor="$orange1"
@@ -1434,19 +1463,19 @@ export default function OrderScreen() {
                               Status: {getStatusText(statusFilter)}
                             </Badge>
                           )}
-                          {searchQuery && (
+                          {searchInput && (
                             <Badge backgroundColor="$blue8" size="$1">
-                              Search: {searchQuery}
+                              Search: {searchInput}
                             </Badge>
                           )}
-                          {filters.customerName && (
+                          {customerNameInput && (
                             <Badge backgroundColor="$purple8" size="$1">
-                              Customer: {filters.customerName}
+                              Customer: {customerNameInput}
                             </Badge>
                           )}
-                          {filters.salesPersonName && (
+                          {salesPersonNameInput && (
                             <Badge backgroundColor="$teal8" size="$1">
-                              Salesperson: {filters.salesPersonName}
+                              Salesperson: {salesPersonNameInput}
                             </Badge>
                           )}
                           {filters.startDate && filters.endDate && (
@@ -1672,4 +1701,4 @@ export default function OrderScreen() {
       )}
     </YStack>
   );
-};
+}

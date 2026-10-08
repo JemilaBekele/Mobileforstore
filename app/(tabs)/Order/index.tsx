@@ -25,6 +25,30 @@ import api from '@/(utils)/config';
 import type { GetAllSellsUserParams, Sell, SellItem, SellItemBatch } from '@/(utils)/types';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getAllSellsUser } from '@/(services)/api/sell';
+import { formatMoney } from '@/(utils)/format';
+import { AppColors } from '@/constants/colors';
+
+// Status badge colours (white/orange theme): raw values so they stay clear
+// regardless of how the $orange scale is remapped.
+const SALE_STATUS_COLORS: Record<string, string> = {
+  DELIVERED: AppColors.success,
+  PARTIALLY_DELIVERED: AppColors.warning,
+  APPROVED: AppColors.info,
+  CANCELLED: AppColors.error,
+  NOT_APPROVED: AppColors.textSecondary,
+};
+
+const ITEM_STATUS_COLORS: Record<string, string> = {
+  DELIVERED: AppColors.success,
+  PENDING: AppColors.primary,
+};
+
+// "Sub name (CODE)" when the line is for a sub-product, otherwise null
+const getSubProductLabel = (item?: SellItem | null): string | null => {
+  const sub = item?.subProduct;
+  if (!sub?.name) return null;
+  return sub.subProductCode ? `${sub.name} (${sub.subProductCode})` : sub.name;
+};
 
 // Import the API function
 
@@ -675,16 +699,8 @@ const SellDetailModal = ({
   visible: boolean;
   onClose: () => void;
 }) => {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'DELIVERED': return '$green9';
-      case 'NOT_APPROVED': return '$orange9';
-      case 'PARTIALLY_DELIVERED': return '$yellow9';
-      case 'APPROVED': return '$blue9';
-      case 'CANCELLED': return '$red9';
-      default: return '$gray9';
-    }
-  };
+  const getStatusColor = (status: string) =>
+    SALE_STATUS_COLORS[status] || AppColors.textMuted;
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -697,13 +713,8 @@ const SellDetailModal = ({
     }
   };
 
-  const getItemStatusColor = (status: string) => {
-    switch (status) {
-      case 'DELIVERED': return '$green9';
-      case 'PENDING': return '$orange9';
-      default: return '$gray9';
-    }
-  };
+  const getItemStatusColor = (status: string) =>
+    ITEM_STATUS_COLORS[status] || AppColors.textMuted;
 
   const getItemStatusText = (status: string) => {
     switch (status) {
@@ -816,7 +827,7 @@ const SellDetailModal = ({
                   Items ({sell.items?.length || 0})
                 </Text>
                 {sell.items?.map((item, index) => (
-                  <Card key={item?.id || index} backgroundColor="$orange2" padding="$3" borderRadius="$3">
+                  <Card key={item?.id || index} backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$3" borderRadius="$3">
                     <YStack space="$3">
                       {/* Item Header */}
                       <XStack justifyContent="space-between" alignItems="flex-start">
@@ -824,7 +835,12 @@ const SellDetailModal = ({
                           <Text fontWeight="700" color="$orange12" numberOfLines={2}>
                             {getProductName(item)}
                           </Text>
-                          <Text fontSize="$2" color="$orange10">
+                          {getSubProductLabel(item) && (
+                            <Text fontSize="$2" fontWeight="600" color="$orange10" numberOfLines={1}>
+                              {getSubProductLabel(item)}
+                            </Text>
+                          )}
+                          <Text fontSize="$2" color="$orange11">
                             Shop: {getShopName(item)}
                           </Text>
                           <Text fontSize="$2" color="$orange10">
@@ -833,7 +849,7 @@ const SellDetailModal = ({
                         </YStack>
                         <YStack alignItems="flex-end">
                           <Text fontWeight="700" color="$green10">
-                            ${item?.unitPrice?.toFixed(2) || '0.00'}
+                            {formatMoney(item?.unitPrice)}
                           </Text>
                           <Text fontSize="$2" color="$orange10">
                             x{item?.quantity || 0}
@@ -859,7 +875,7 @@ const SellDetailModal = ({
                           </Text>
                         </YStack>
                         <Text fontWeight="600" color="$orange12">
-                          {item?.totalPrice?.toFixed(2) || '0.00'}
+                          {formatMoney(item?.totalPrice)}
                         </Text>
                       </XStack>
                     </YStack>
@@ -872,26 +888,26 @@ const SellDetailModal = ({
                 <YStack space="$2">
                   <XStack justifyContent="space-between">
                     <Text color="$orange11">Subtotal:</Text>
-                    <Text color="$orange12">{sell.subTotal?.toFixed(2) || '0.00'}</Text>
+                    <Text color="$orange12">{formatMoney(sell.subTotal)}</Text>
                   </XStack>
                   <XStack justifyContent="space-between">
                     <Text color="$orange11">Discount:</Text>
-                    <Text color="$red10">-{sell.discount?.toFixed(2) || '0.00'}</Text>
+                    <Text color="$red10">-{formatMoney(sell.discount)}</Text>
                   </XStack>
                   <XStack justifyContent="space-between">
                     <Text color="$orange11">VAT:</Text>
-                    <Text color="$orange12">{sell.vat?.toFixed(2) || '0.00'}</Text>
+                    <Text color="$orange12">{formatMoney(sell.vat)}</Text>
                   </XStack>
                   <XStack justifyContent="space-between" borderTopWidth={1} borderTopColor="$orange4" paddingTop="$2">
                     <Text fontWeight="700" color="$orange12" fontSize="$5">Grand Total:</Text>
                     <Text fontWeight="700" color="$green10" fontSize="$5">
-                      {sell.grandTotal?.toFixed(2) || '0.00'}
+                      {formatMoney(sell.grandTotal)}
                     </Text>
                   </XStack>
-                  {sell.NetTotal && (
+                  {sell.NetTotal != null && (
                     <XStack justifyContent="space-between">
                       <Text color="$orange11">Net Total:</Text>
-                      <Text color="$orange12">{sell.NetTotal.toFixed(2)}</Text>
+                      <Text color="$orange12">{formatMoney(sell.NetTotal)}</Text>
                     </XStack>
                   )}
                 </YStack>
@@ -1163,7 +1179,9 @@ export default function OrderScreen() {
   const getProductNames = (sell: Sell) => {
     if (!sell.items || !Array.isArray(sell.items)) return '';
     return sell.items.map(item => {
-      return item?.product?.name || `Product ${item?.productId?.slice(-8) || 'Unknown'}`;
+      const name = item?.product?.name || `Product ${item?.productId?.slice(-8) || 'Unknown'}`;
+      const sub = item?.subProduct;
+      return [name, sub?.name, sub?.subProductCode].filter(Boolean).join(' ');
     }).join(' ');
   };
 
@@ -1206,16 +1224,8 @@ export default function OrderScreen() {
     </YStack>
   );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'DELIVERED': return '$green9';
-      case 'NOT_APPROVED': return '$orange9';
-      case 'PARTIALLY_DELIVERED': return '$yellow9';
-      case 'APPROVED': return '$blue9';
-      case 'CANCELLED': return '$red9';
-      default: return '$gray9';
-    }
-  };
+  const getStatusColor = (status: string) =>
+    SALE_STATUS_COLORS[status] || AppColors.textMuted;
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -1261,7 +1271,7 @@ export default function OrderScreen() {
             borderRadius="$4" 
             backgroundColor="$orange1"
             borderColor="$orange4"
-            shadowColor="$orange7"
+            shadowColor="$orange5"
           >
             <Card.Header padded>
               <YStack space="$3" alignItems="center">
@@ -1514,7 +1524,7 @@ export default function OrderScreen() {
                   borderRadius="$4" 
                   backgroundColor="$orange1"
                   borderColor="$orange4"
-                  shadowColor="$orange7"
+                  shadowColor="$orange5"
                   onPress={() => handleViewDetails(sell)}
                 >
                   <Card.Header padded>
@@ -1578,15 +1588,50 @@ export default function OrderScreen() {
                         </YStack>
                       </XStack>
 
-                     
+                      {/* Items summary (admins can see items from several shops) */}
+                      {sell.items && sell.items.length > 0 && (
+                        <YStack
+                          space="$1"
+                          borderTopWidth={1}
+                          borderTopColor="$orange4"
+                          paddingTop="$2"
+                        >
+                          {sell.items.slice(0, 3).map((item, idx) => {
+                            const subLabel = getSubProductLabel(item);
+                            return (
+                              <XStack key={item?.id || idx} justifyContent="space-between" alignItems="flex-start" space="$2">
+                                <YStack flex={1}>
+                                  <Text fontSize="$2" fontWeight="600" color="$orange12" numberOfLines={1}>
+                                    {item?.product?.name || `Product ${item?.productId?.slice(-8) || 'Unknown'}`}
+                                    {subLabel ? ` — ${subLabel}` : ''}
+                                  </Text>
+                                  {item?.shop?.name ? (
+                                    <Text fontSize="$1" color="$orange11" numberOfLines={1}>
+                                      {item.shop.name}
+                                    </Text>
+                                  ) : null}
+                                </YStack>
+                                <Text fontSize="$2" color="$orange11">
+                                  x{item?.quantity || 0}
+                                </Text>
+                              </XStack>
+                            );
+                          })}
+                          {sell.items.length > 3 && (
+                            <Text fontSize="$1" color="$orange10">
+                              +{sell.items.length - 3} more item{sell.items.length - 3 > 1 ? 's' : ''}
+                            </Text>
+                          )}
+                        </YStack>
+                      )}
 
                       {/* Totals */}
                       <XStack justifyContent="space-between" alignItems="center">
                         <Text fontSize="$3" fontWeight="600" color="$orange11">
                           Total:
                         </Text>
-                        <Text fontSize="$4" fontWeight="800" color="$green10">
-                          {sell.grandTotal?.toFixed(2) || '0.00'}
+                        <Text fontSize="$4" fontWeight="800" color="$orange10">
+                          {formatMoney(sell.grandTotal)}
                         </Text>
                       </XStack>
 
@@ -1642,16 +1687,16 @@ export default function OrderScreen() {
                       {/* View Full Details Button */}
                       <Button
                         size="$2"
-                        backgroundColor="$blue3"
-                        borderColor="$blue6"
+                        backgroundColor="$orange9"
+                        borderColor="$orange9"
                         borderWidth={1}
                         borderRadius="$3"
                         onPress={() => handleGoToDetailPage(sell)}
-                        pressStyle={{ backgroundColor: "$blue4" }}
+                        pressStyle={{ backgroundColor: "$orange10" }}
                       >
                         <XStack alignItems="center" space="$2">
                           <Text>📄</Text>
-                          <Text color="$blue11" fontWeight="600" fontSize="$2">
+                          <Text color="white" fontWeight="600" fontSize="$2">
                             View Full Details
                           </Text>
                         </XStack>

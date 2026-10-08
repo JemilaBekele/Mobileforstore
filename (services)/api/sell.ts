@@ -51,17 +51,27 @@ export const getSellByIdByUser = async (
 };
 
 // Get available batches by product and shop
+// For a sub-product line pass subProductId: only its batches can fill it.
 export const getAvailableBatchesByProductAndShop = async (
   shopId: string,
-  productId: string
+  productId: string,
+  subProductId?: string | null
 ): Promise<{ success: boolean; batches: ProductBatch[]; count: number }> => {
   try {
     const response = await api.get(
-      `/shops/${shopId}/products/${productId}/batches`
+      `/shops/${shopId}/products/${productId}/batches`,
+      { params: subProductId ? { subProductId } : undefined }
     );
+    const batches: ProductBatch[] = (response.data.batches || []).map((batch: ProductBatch) => ({
+      ...batch,
+      // older servers do not send availableQuantity
+      availableQuantity:
+        batch.availableQuantity ??
+        (batch.ShopStock || []).reduce((sum, row) => sum + (row.quantity || 0), 0),
+    }));
     return {
       success: true,
-      batches: response.data.batches || [],
+      batches,
       count: response.data.count || 0,
     };
   } catch (error: any) {

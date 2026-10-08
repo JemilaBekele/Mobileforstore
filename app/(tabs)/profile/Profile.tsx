@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
-import { 
-  ScrollView, 
-  YStack, 
-  H4, 
-  Card, 
-  Input, 
-  Fieldset, 
-  Label, 
-  Button, 
-  Text, 
-  XStack, 
+import {
+  ScrollView,
+  YStack,
+  H4,
+  Card,
+  Input,
+  Fieldset,
+  Label,
+  Button,
+  Text,
+  XStack,
   Spinner
 } from 'tamagui';
 import { useDispatch } from 'react-redux';
@@ -21,19 +21,19 @@ import type { AppDispatch } from '@/(redux)/store';
 export default function ProfileInfo() {
   const dispatch = useDispatch<AppDispatch>();
   const { user, loading, error } = useAppSelector((state) => state.auth);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
   });
-  
+
   const [validationErrors, setValidationErrors] = useState({
     name: '',
     email: '',
     phone: '',
   });
-  
+
   const [isEditing, setIsEditing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -92,7 +92,7 @@ export default function ProfileInfo() {
       isValid = false;
     }
 
-   
+
 
     setValidationErrors(errors);
     return isValid;
@@ -100,7 +100,7 @@ export default function ProfileInfo() {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear validation error for this field when user starts typing
     if (validationErrors[field as keyof typeof validationErrors]) {
       setValidationErrors(prev => ({ ...prev, [field]: '' }));
@@ -120,7 +120,7 @@ export default function ProfileInfo() {
     try {
       // Prepare update data - only include name, email, and phone fields
       const updatedData: Record<string, any> = {};
-      
+
       if (formData.name !== user.name) updatedData.name = formData.name;
       if (formData.email !== user.email) updatedData.email = formData.email;
       if (formData.phone !== user.phone) updatedData.phone = formData.phone;
@@ -164,30 +164,38 @@ export default function ProfileInfo() {
     setIsEditing(false);
   };
 
-  const hasChanges = 
+  const hasChanges =
     formData.name !== user?.name ||
     formData.email !== user?.email ||
     formData.phone !== user?.phone;
 
-  const isFormValid = 
-    formData.name.trim() && 
-    formData.email.trim() && 
+  // role / branch can come as a string or as an object with a name
+  const role: any = user?.role;
+  const branch: any = user?.branch;
+  const roleValue = typeof role === 'string' ? role : role?.name || 'N/A';
+  const branchValue = typeof branch === 'string' ? branch : branch?.name || 'N/A';
+
+  const isFormValid =
+    formData.name.trim() &&
+    formData.email.trim() &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
 
   return (
     <ScrollView flex={1} backgroundColor="$orange1">
       <YStack flex={1} padding="$4" space="$4">
-        <H4 color="$orange12" marginBottom="$2">
-          Account Information
-        </H4>
-
-        <Text fontSize="$3" color="$orange10" marginBottom="$4">
-          Update your personal information
-        </Text>
+        <YStack space="$1" marginBottom="$2">
+          <H4 color="$orange12" fontWeight="800">
+            Account Information
+          </H4>
+          <YStack width={40} height={3} borderRadius={2} backgroundColor="$orange9" />
+          <Text fontSize="$3" color="$orange11" marginTop="$2">
+            Update your personal information
+          </Text>
+        </YStack>
 
         {/* Success Message */}
         {showSuccess && (
-          <Card backgroundColor="$green2" borderColor="$green6" padding="$3" marginBottom="$4">
+          <Card backgroundColor="$green2" borderColor="$green6" borderWidth={1} borderRadius="$4" padding="$3" marginBottom="$4">
             <XStack alignItems="center" space="$2">
               <Text color="$green11" fontSize="$4">✅</Text>
               <Text color="$green11" fontWeight="600" fontSize="$3">
@@ -197,91 +205,100 @@ export default function ProfileInfo() {
           </Card>
         )}
 
-        <Card elevate bordered padding="$4" backgroundColor="$orange1">
+        <Card bordered borderWidth={1} borderColor="$orange4" borderRadius="$5" padding="$4" backgroundColor="$orange1">
           <YStack space="$4">
             {/* Name Field */}
             <Fieldset>
-              <Label htmlFor="name" color="$orange11" fontSize="$4">
+              <Label htmlFor="name" color="$orange11" fontSize="$3" fontWeight="600">
                 Full Name *
               </Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChangeText={(text) => handleInputChange('name', text)}
-                borderColor={validationErrors.name ? "$red8" : "$orange5"}
-                backgroundColor="$orange1"
+                borderColor={validationErrors.name ? "$red8" : "$orange4"}
+                focusStyle={{ borderColor: validationErrors.name ? "$red8" : "$orange9" }}
+                backgroundColor={isEditing ? "$orange1" : "$orange2"}
+                color="$orange12"
+                borderRadius="$4"
                 placeholder="Enter your full name"
                 editable={isEditing}
               />
-              {validationErrors.name && (
+              {validationErrors.name ? (
                 <Text color="$red10" fontSize="$2" marginTop="$2">
                   {validationErrors.name}
                 </Text>
-              )}
+              ) : null}
             </Fieldset>
 
             {/* Email Field */}
             <Fieldset>
-              <Label htmlFor="email" color="$orange11" fontSize="$4">
+              <Label htmlFor="email" color="$orange11" fontSize="$3" fontWeight="600">
                 Email Address *
               </Label>
               <Input
                 id="email"
                 value={formData.email}
                 onChangeText={(text) => handleInputChange('email', text)}
-                borderColor={validationErrors.email ? "$red8" : "$orange5"}
-                backgroundColor="$orange1"
+                borderColor={validationErrors.email ? "$red8" : "$orange4"}
+                focusStyle={{ borderColor: validationErrors.email ? "$red8" : "$orange9" }}
+                backgroundColor={isEditing ? "$orange1" : "$orange2"}
+                color="$orange12"
+                borderRadius="$4"
                 placeholder="Enter your email address"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={isEditing}
               />
-              {validationErrors.email && (
+              {validationErrors.email ? (
                 <Text color="$red10" fontSize="$2" marginTop="$2">
                   {validationErrors.email}
                 </Text>
-              )}
+              ) : null}
             </Fieldset>
 
             {/* Phone Field */}
             <Fieldset>
-              <Label htmlFor="phone" color="$orange11" fontSize="$4">
+              <Label htmlFor="phone" color="$orange11" fontSize="$3" fontWeight="600">
                 Phone Number
               </Label>
               <Input
                 id="phone"
                 value={formData.phone}
                 onChangeText={(text) => handleInputChange('phone', text)}
-                borderColor={validationErrors.phone ? "$red8" : "$orange5"}
-                backgroundColor="$orange1"
+                borderColor={validationErrors.phone ? "$red8" : "$orange4"}
+                focusStyle={{ borderColor: validationErrors.phone ? "$red8" : "$orange9" }}
+                backgroundColor={isEditing ? "$orange1" : "$orange2"}
+                color="$orange12"
+                borderRadius="$4"
                 placeholder="Enter your phone number"
                 keyboardType="phone-pad"
                 editable={isEditing}
               />
-              {validationErrors.phone && (
+              {validationErrors.phone ? (
                 <Text color="$red10" fontSize="$2" marginTop="$2">
                   {validationErrors.phone}
                 </Text>
-              )}
+              ) : null}
             </Fieldset>
 
             {/* Read-only Information */}
             {!isEditing && (
               <YStack space="$3" marginTop="$2">
-                <Card backgroundColor="$orange2" padding="$3" borderRadius="$3">
+                <Card backgroundColor="$orange2" padding="$3" borderRadius="$4">
                   <YStack space="$2">
-                  
+
                     <XStack justifyContent="space-between">
                       <Text color="$orange11" fontSize="$3">Role:</Text>
                       <Text color="$orange12" fontSize="$3" fontWeight="500">
-                        {user?.role || 'N/A'}
+                        {roleValue}
                       </Text>
                     </XStack>
                     <XStack justifyContent="space-between">
                       <Text color="$orange11" fontSize="$3">Branch:</Text>
                       <Text color="$orange12" fontSize="$3" fontWeight="500">
-                        {user?.branch?.name || 'N/A'}
+                        {branchValue}
                       </Text>
                     </XStack>
                     {/* <XStack justifyContent="space-between">
@@ -301,8 +318,11 @@ export default function ProfileInfo() {
                 <Button
                   flex={1}
                   backgroundColor="$orange9"
+                  borderRadius="$4"
+                  pressStyle={{ backgroundColor: "$orange10" }}
                   onPress={handleUpdate}
                   disabled={!isFormValid || !hasChanges || loading}
+                  opacity={!isFormValid || !hasChanges || loading ? 0.6 : 1}
                 >
                   {loading ? (
                     <XStack alignItems="center" space="$2">
@@ -316,21 +336,25 @@ export default function ProfileInfo() {
                 <Button
                   flex={1}
                   variant="outlined"
-                  borderColor="$orange6"
-                  backgroundColor="transparent"
+                  borderColor="$orange9"
+                  borderWidth={1}
+                  borderRadius="$4"
+                  backgroundColor="$orange1"
                   onPress={handleCancel}
                   disabled={loading}
                 >
-                  <Text color="$orange11" fontWeight="600">Cancel</Text>
+                  <Text color="$orange9" fontWeight="700">Cancel</Text>
                 </Button>
               </XStack>
             ) : (
               <Button
                 backgroundColor="$orange9"
+                borderRadius="$4"
+                pressStyle={{ backgroundColor: "$orange10" }}
                 onPress={() => setIsEditing(true)}
                 marginTop="$2"
               >
-                <Text color="white" fontWeight="600">Edit Profile</Text>
+                <Text color="white" fontWeight="700">Edit Profile</Text>
               </Button>
             )}
           </YStack>
@@ -338,30 +362,30 @@ export default function ProfileInfo() {
 
         {/* Form Status */}
         {isEditing && (
-          <Card backgroundColor="$blue2" borderColor="$blue6" padding="$3">
+          <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} borderRadius="$4" padding="$3">
             <YStack space="$1">
-              <Text fontSize="$3" fontWeight="600" color="$blue11">
+              <Text fontSize="$3" fontWeight="600" color="$orange12">
                 Form Status:
               </Text>
               <XStack alignItems="center" space="$2">
-                <Text color={isFormValid ? "$green9" : "$orange8"} fontSize="$2">
+                <Text color={isFormValid ? "$green9" : "$orange9"} fontSize="$2">
                   {isFormValid ? "✓" : "○"}
                 </Text>
-                <Text color="$blue10" fontSize="$2">All required fields are valid</Text>
+                <Text color="$orange11" fontSize="$2">All required fields are valid</Text>
               </XStack>
               <XStack alignItems="center" space="$2">
-                <Text color={hasChanges ? "$green9" : "$orange8"} fontSize="$2">
+                <Text color={hasChanges ? "$green9" : "$orange9"} fontSize="$2">
                   {hasChanges ? "✓" : "○"}
                 </Text>
-                <Text color="$blue10" fontSize="$2">Changes made to form</Text>
+                <Text color="$orange11" fontSize="$2">Changes made to form</Text>
               </XStack>
             </YStack>
           </Card>
         )}
 
         {/* User Information Note */}
-        <Card backgroundColor="$orange2" borderColor="$orange4" padding="$3">
-          <Text fontSize="$2" color="$orange10" textAlign="center">
+        <Card backgroundColor="$orange2" borderRadius="$4" padding="$3">
+          <Text fontSize="$2" color="$orange11" textAlign="center">
             * Required fields. Only name, email, and phone can be updated. Other information is managed by administrators.
           </Text>
         </Card>

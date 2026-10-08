@@ -9,19 +9,19 @@ import type { AppDispatch } from '@/(redux)/store';
 export default function PasswordChange() {
   const dispatch = useDispatch<AppDispatch>();
   const { loading, error } = useAppSelector((state) => state.auth);
-  
+
   const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
-  
+
   const [validationErrors, setValidationErrors] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
-  
+
   const [showSuccess, setShowSuccess] = useState(false);
 
   // Clear errors when component unmounts or when error changes
@@ -75,7 +75,7 @@ export default function PasswordChange() {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear validation error for this field when user starts typing
     if (validationErrors[field as keyof typeof validationErrors]) {
       setValidationErrors(prev => ({ ...prev, [field]: '' }));
@@ -114,26 +114,28 @@ export default function PasswordChange() {
   };
 
   // Simplified validation - only check if all fields are filled and passwords match
-  const isFormValid = 
-    formData.currentPassword.trim() && 
-    formData.newPassword.trim() && 
+  const isFormValid =
+    formData.currentPassword.trim() &&
+    formData.newPassword.trim() &&
     formData.confirmPassword.trim() &&
     formData.newPassword === formData.confirmPassword;
 
   return (
     <ScrollView flex={1} backgroundColor="$orange1">
       <YStack flex={1} padding="$4" space="$4">
-        <H4 color="$orange12" marginBottom="$2">
-          Change Password
-        </H4>
-
-        <Text fontSize="$3" color="$orange10" marginBottom="$4">
-          Update your password (any password is allowed for testing)
-        </Text>
+        <YStack space="$1" marginBottom="$2">
+          <H4 color="$orange12" fontWeight="800">
+            Change Password
+          </H4>
+          <YStack width={40} height={3} borderRadius={2} backgroundColor="$orange9" />
+          <Text fontSize="$3" color="$orange11" marginTop="$2">
+            Update your password (any password is allowed for testing)
+          </Text>
+        </YStack>
 
         {/* Success Message */}
         {showSuccess && (
-          <Card backgroundColor="$green2" borderColor="$green6" padding="$3" marginBottom="$4">
+          <Card backgroundColor="$green2" borderColor="$green6" borderWidth={1} borderRadius="$4" padding="$3" marginBottom="$4">
             <XStack alignItems="center" space="$2">
               <Text color="$green11" fontSize="$4">✅</Text>
               <Text color="$green11" fontWeight="600" fontSize="$3">
@@ -143,11 +145,11 @@ export default function PasswordChange() {
           </Card>
         )}
 
-        <Card elevate bordered padding="$4" backgroundColor="$orange1">
+        <Card bordered borderWidth={1} borderColor="$orange4" borderRadius="$5" padding="$4" backgroundColor="$orange1">
           <YStack space="$4">
             {/* Current Password */}
             <Fieldset>
-              <Label htmlFor="currentPassword" color="$orange11" fontSize="$4">
+              <Label htmlFor="currentPassword" color="$orange11" fontSize="$3" fontWeight="600">
                 Current Password
               </Label>
               <Input
@@ -155,22 +157,25 @@ export default function PasswordChange() {
                 secureTextEntry
                 value={formData.currentPassword}
                 onChangeText={(text) => handleInputChange('currentPassword', text)}
-                borderColor={validationErrors.currentPassword ? "$red8" : "$orange5"}
+                borderColor={validationErrors.currentPassword ? "$red8" : "$orange4"}
+                focusStyle={{ borderColor: validationErrors.currentPassword ? "$red8" : "$orange9" }}
                 backgroundColor="$orange1"
+                color="$orange12"
+                borderRadius="$4"
                 placeholder="Enter your current password"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              {validationErrors.currentPassword && (
+              {validationErrors.currentPassword ? (
                 <Text color="$red10" fontSize="$2" marginTop="$2">
                   {validationErrors.currentPassword}
                 </Text>
-              )}
+              ) : null}
             </Fieldset>
 
             {/* New Password */}
             <Fieldset>
-              <Label htmlFor="newPassword" color="$orange11" fontSize="$4">
+              <Label htmlFor="newPassword" color="$orange11" fontSize="$3" fontWeight="600">
                 New Password
               </Label>
               <Input
@@ -178,22 +183,25 @@ export default function PasswordChange() {
                 secureTextEntry
                 value={formData.newPassword}
                 onChangeText={(text) => handleInputChange('newPassword', text)}
-                borderColor={validationErrors.newPassword ? "$red8" : "$orange5"}
+                borderColor={validationErrors.newPassword ? "$red8" : "$orange4"}
+                focusStyle={{ borderColor: validationErrors.newPassword ? "$red8" : "$orange9" }}
                 backgroundColor="$orange1"
+                color="$orange12"
+                borderRadius="$4"
                 placeholder="Enter any new password (testing)"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              {validationErrors.newPassword && (
+              {validationErrors.newPassword ? (
                 <Text color="$red10" fontSize="$2" marginTop="$2">
                   {validationErrors.newPassword}
                 </Text>
-              )}
+              ) : null}
             </Fieldset>
 
             {/* Confirm Password */}
             <Fieldset>
-              <Label htmlFor="confirmPassword" color="$orange11" fontSize="$4">
+              <Label htmlFor="confirmPassword" color="$orange11" fontSize="$3" fontWeight="600">
                 Confirm New Password
               </Label>
               <Input
@@ -201,52 +209,57 @@ export default function PasswordChange() {
                 secureTextEntry
                 value={formData.confirmPassword}
                 onChangeText={(text) => handleInputChange('confirmPassword', text)}
-                borderColor={validationErrors.confirmPassword ? "$red8" : "$orange5"}
+                borderColor={validationErrors.confirmPassword ? "$red8" : "$orange4"}
+                focusStyle={{ borderColor: validationErrors.confirmPassword ? "$red8" : "$orange9" }}
                 backgroundColor="$orange1"
+                color="$orange12"
+                borderRadius="$4"
                 placeholder="Confirm your new password"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              {validationErrors.confirmPassword && (
+              {validationErrors.confirmPassword ? (
                 <Text color="$red10" fontSize="$2" marginTop="$2">
                   {validationErrors.confirmPassword}
                 </Text>
-              )}
+              ) : null}
             </Fieldset>
 
             {/* Simple Requirements */}
-            <Card backgroundColor="$orange2" padding="$3" borderRadius="$3">
-              <Text fontSize="$3" fontWeight="600" color="$orange11" marginBottom="$2">
+            <Card backgroundColor="$orange2" padding="$3" borderRadius="$4">
+              <Text fontSize="$3" fontWeight="600" color="$orange12" marginBottom="$2">
                 Basic Requirements:
               </Text>
               <YStack space="$1">
                 <XStack alignItems="center" space="$2">
-                  <Text color={formData.currentPassword ? "$green9" : "$orange8"} fontSize="$2">
+                  <Text color={formData.currentPassword ? "$green9" : "$orange9"} fontSize="$2">
                     {formData.currentPassword ? "✓" : "○"}
                   </Text>
-                  <Text color="$orange10" fontSize="$2">Current password entered</Text>
+                  <Text color="$orange11" fontSize="$2">Current password entered</Text>
                 </XStack>
                 <XStack alignItems="center" space="$2">
-                  <Text color={formData.newPassword ? "$green9" : "$orange8"} fontSize="$2">
+                  <Text color={formData.newPassword ? "$green9" : "$orange9"} fontSize="$2">
                     {formData.newPassword ? "✓" : "○"}
                   </Text>
-                  <Text color="$orange10" fontSize="$2">New password entered</Text>
+                  <Text color="$orange11" fontSize="$2">New password entered</Text>
                 </XStack>
                 <XStack alignItems="center" space="$2">
-                  <Text color={formData.newPassword === formData.confirmPassword && formData.newPassword ? "$green9" : "$orange8"} fontSize="$2">
+                  <Text color={formData.newPassword === formData.confirmPassword && formData.newPassword ? "$green9" : "$orange9"} fontSize="$2">
                     {formData.newPassword === formData.confirmPassword && formData.newPassword ? "✓" : "○"}
                   </Text>
-                  <Text color="$orange10" fontSize="$2">Passwords match</Text>
+                  <Text color="$orange11" fontSize="$2">Passwords match</Text>
                 </XStack>
               </YStack>
             </Card>
 
             {/* Submit Button */}
             <Button
-              backgroundColor={isFormValid ? "$orange9" : "$orange5"}
-              borderColor={isFormValid ? "$orange10" : "$orange6"}
+              backgroundColor="$orange9"
+              borderColor="$orange9"
               borderWidth={1}
               borderRadius="$4"
+              opacity={isFormValid && !loading ? 1 : 0.5}
+              pressStyle={{ backgroundColor: "$orange10" }}
               onPress={handleChangePassword}
               disabled={!isFormValid || loading}
               height="$5"
@@ -257,15 +270,16 @@ export default function PasswordChange() {
                   <Text color="white" fontWeight="600">Changing Password...</Text>
                 </XStack>
               ) : (
-                <Text color="white" fontWeight="600">Change Password</Text>
+                <Text color="white" fontWeight="700">Change Password</Text>
               )}
             </Button>
 
             {/* Clear Button */}
             <Button
               variant="outlined"
-              borderColor="$orange6"
-              backgroundColor="transparent"
+              borderColor="$orange9"
+              borderWidth={1}
+              backgroundColor="$orange1"
               borderRadius="$4"
               onPress={() => {
                 setFormData({
@@ -281,12 +295,12 @@ export default function PasswordChange() {
               }}
               disabled={loading}
             >
-              <Text color="$orange11" fontWeight="600">Clear Form</Text>
+              <Text color="$orange9" fontWeight="700">Clear Form</Text>
             </Button>
           </YStack>
         </Card>
 
-     
+
       </YStack>
     </ScrollView>
   );

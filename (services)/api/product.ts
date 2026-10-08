@@ -11,8 +11,8 @@ export interface BatchBranchStockDetails {
 }
 
 export interface BatchStockDetails {
-  warningQuantity: string;
   batchId: string;
+  subProductId?: string | null;
   batchNumber: string;
   expiryDate: string | null;
   price: number | null;
@@ -39,8 +39,6 @@ export interface BranchTotal {
 }
 
 export interface StockSummary {
-  storeStocks: object;
-  shopStocks: any;
   branchStocks: { [branchName: string]: BranchStock };
   totalShopStock: number;
   totalStoreStock: number;
@@ -65,6 +63,8 @@ export interface AdditionalPrice {
   label: string | null;
   price: number;
   productId: string;
+  // null: applies to the product; set: only for that sub-product
+  subProductId?: string | null;
   shopId: string | null;
   shop: {
     id: string;
@@ -83,7 +83,9 @@ export interface Product {
   description: string | null;
   categoryId: string;
   subCategoryId: string | null;
-  sellPrice: string | null;
+  sellPrice: number | string | null;
+  // low-stock alert level for the whole product (0 = no alert)
+  warningQuantity?: number;
   imageUrl: string;
   unitOfMeasureId: string;
   isActive: boolean;
@@ -104,9 +106,22 @@ export interface Product {
     base: boolean;
   };
   AdditionalPrice: AdditionalPrice[];
+  subProducts?: ProductSubProduct[];
   batches: any[];
   stockSummary: StockSummary;
   overallTotals?: OverallTotals;
+}
+
+export interface ProductSubProduct {
+  id: string;
+  name: string;
+  subProductCode: string;
+  // null: sold at the product price
+  sellPrice: number | null;
+  imageUrl?: string;
+  totalShopStock: number;
+  totalStoreStock: number;
+  totalStock: number;
 }
 
 export interface Shop {

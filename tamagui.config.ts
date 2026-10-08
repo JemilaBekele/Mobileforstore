@@ -1,11 +1,42 @@
-import { createTamagui } from 'tamagui'
+import { createTamagui, createTokens } from 'tamagui'
 import { createInterFont } from '@tamagui/font-inter'
 import { shorthands } from '@tamagui/shorthands'
 import { themes, tokens } from '@tamagui/themes'
 import { createMedia } from '@tamagui/react-native-media-driver'
+import { AppColors } from './constants/colors'
 
 const headingFont = createInterFont()
 const bodyFont = createInterFont()
+
+// The screens are built on the $orange1..$orange12 scale. Remap it to the
+// white-and-orange look of the e-commerce app: white pages, light orange
+// tints, slate text and #FF6B00 as the brand orange.
+const brandOrange = {
+  orange1: AppColors.surface, // page and card background
+  orange2: AppColors.primaryLight, // inner cards, chips
+  orange3: AppColors.primaryContainer, // highlighted areas
+  orange4: AppColors.border, // light borders
+  orange5: AppColors.border,
+  orange6: '#FED7AA', // orange borders
+  orange7: '#FDBA74',
+  orange8: AppColors.primaryGradientEnd,
+  orange9: AppColors.primary, // buttons, active elements
+  orange10: AppColors.secondary, // accents, icons
+  orange11: AppColors.textSecondaryStrong, // labels, section titles
+  orange12: AppColors.textPrimary, // main text
+}
+
+const lightTheme = {
+  ...themes.light,
+  ...brandOrange,
+  background: AppColors.surface,
+  backgroundHover: AppColors.primaryLight,
+  backgroundPress: AppColors.primaryContainer,
+  backgroundFocus: AppColors.primaryContainer,
+  color: AppColors.textPrimary,
+  borderColor: AppColors.border,
+  placeholderColor: AppColors.textMuted,
+}
 
 export const config = createTamagui({
   defaultFont: 'body',
@@ -13,8 +44,12 @@ export const config = createTamagui({
     body: bodyFont,
     heading: headingFont,
   },
-  themes,
-  tokens,
+  // The app is always white and orange, also when the phone is in dark mode
+  themes: { ...themes, light: lightTheme, dark: lightTheme },
+  tokens: createTokens({
+    ...tokens,
+    color: { ...tokens.color, ...brandOrange },
+  }),
   shorthands,
   media: createMedia({
     xs: { maxWidth: 660 },

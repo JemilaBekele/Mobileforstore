@@ -29,6 +29,32 @@ import {
   getAvailableBatchesByProductAndShop,
   partialSaleDelivery,
 } from '@/(services)/api/sell';
+import { formatMoney } from '@/(utils)/format';
+import { AppColors } from '@/constants/colors';
+
+// Status badge colours (white/orange theme)
+const SALE_STATUS_COLORS: Record<string, string> = {
+  DELIVERED: AppColors.success,
+  PARTIALLY_DELIVERED: AppColors.warning,
+  APPROVED: AppColors.info,
+  CANCELLED: AppColors.error,
+  NOT_APPROVED: AppColors.textSecondary,
+};
+
+const ITEM_STATUS_COLORS: Record<string, string> = {
+  DELIVERED: AppColors.success,
+  PENDING: AppColors.primary,
+};
+
+const getProductName = (item: SellItem) =>
+  item.product?.name || `Product ${item.productId?.slice(-8) || 'Unknown'}`;
+
+// "Sub name (CODE)" when the line is for a sub-product, otherwise null
+const getSubProductLabel = (item?: SellItem | null): string | null => {
+  const sub = item?.subProduct;
+  if (!sub?.name) return null;
+  return sub.subProductCode ? `${sub.name} (${sub.subProductCode})` : sub.name;
+};
 
 // Add the normalizeImagePath function
 const BACKEND_URL = "https://ordere.net";
@@ -68,7 +94,6 @@ export default function SellDetailPage() {
   const [batchQuantities, setBatchQuantities] = useState<Record<string, string>>({});
   const [selectedBatches, setSelectedBatches] = useState<SelectedBatches>({});
   const [deliverySuccess, setDeliverySuccess] = useState(false);
-  const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
   // TanStack Query for fetching sell details
   const {
@@ -97,12 +122,22 @@ export default function SellDetailPage() {
     error: batchesError,
     refetch: refetchBatches,
   } = useQuery({
-    queryKey: ['availableBatches', activeItem?.shopId, activeItem?.productId],
+    queryKey: [
+      'availableBatches',
+      activeItem?.shopId,
+      activeItem?.productId,
+      activeItem?.subProductId ?? null,
+    ],
     queryFn: () => {
       if (!activeItem?.shopId || !activeItem?.productId) {
         throw new Error('Missing shop or product information');
       }
-      return getAvailableBatchesByProductAndShop(activeItem.shopId, activeItem.productId);
+      // A sub-product line may only use that sub-product's batches
+      return getAvailableBatchesByProductAndShop(
+        activeItem.shopId,
+        activeItem.productId,
+        activeItem.subProductId
+      );
     },
     enabled: !!activeItem?.shopId && !!activeItem?.productId,
   });
@@ -114,17 +149,23 @@ export default function SellDetailPage() {
     mutationFn: ({ id, deliveryData }: { id: string; deliveryData: DeliveryData }) =>
       partialSaleDelivery(id, deliveryData),
     onSuccess: () => {
+      setShowConfirmModal(false);
       setDeliverySuccess(true);
       setShowSuccessModal(true);
-      refetchSell();
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['sell', sellId] });
       // Clear selected batches
       setSelectedBatches({});
     },
     onError: (error: Error) => {
-      setDeliveryError(error.message);
-      Alert.alert('Delivery Error', error.message);
+      // e.g. "already delivered" / "changed by another request" / insufficient stock:
+      // close the confirm modal and reload so the user sees the current state
+      setShowConfirmModal(false);
+      Alert.alert('Delivery Error', error.message || 'Failed to process delivery');
+    },
+    onSettled: () => {
+      refetchSell();
+      queryClient.invalidateQueries({ queryKey: ['sell', sellId] });
+      queryClient.invalidateQueries({ queryKey: ['sells'] });
+      queryClient.invalidateQueries({ queryKey: ['availableBatches'] });
     },
   });
 
@@ -154,15 +195,17 @@ export default function SellDetailPage() {
 
   // Get product image URL
   const getProductImageUrl = useMemo(() => {
-    if (!activeItem?.product?.imageUrl) return null;
-    return normalizeImagePath(activeItem.product.imageUrl);
+    const imageUrl = activeItem?.subProduct?.imageUrl || activeItem?.product?.imageUrl;
+    if (!imageUrl) return null;
+    return normalizeImagePath(imageUrl);
   }, [activeItem]);
 
   // Calculate available quantity considering already selected batches
   const getAvailableQuantityForBatch = useMemo(() => (batch: ProductBatch) => {
-    if (!activeItem) return batch.stock || batch.quantity || batch.availableQuantity || 0;
-    
-    const batchStock = batch.stock || batch.quantity || batch.availableQuantity || 0;
+    // availableQuantity = what this shop holds of the batch
+    const batchStock = batch.availableQuantity || 0;
+    if (!activeItem) return batchStock;
+
     const selectedBatch = getSelectedBatchesForItem(activeItem.id)
       .find(b => b.batchId === batch.id);
     
@@ -192,13 +235,6 @@ export default function SellDetailPage() {
   }, [sellError]);
 
   useEffect(() => {
-    if (deliveryError) {
-      Alert.alert('Delivery Error', deliveryError);
-      setDeliveryError(null);
-    }
-  }, [deliveryError]);
-
-  useEffect(() => {
     if (deliverySuccess) {
       setShowSuccessModal(true);
     }
@@ -221,6 +257,10 @@ export default function SellDetailPage() {
       return;
     }
     
+    if (activeItem?.id === item.id) {
+      // Same query key: reload so the quantities are current
+      refetchBatches();
+    }
     setActiveItem(item);
     setShowBatchModal(true);
   };
@@ -453,7 +493,7 @@ export default function SellDetailPage() {
   };
 
   const handleSubmitDelivery = () => {
-    if (!sellId) return;
+    if (!sellId || partialDeliveryMutation.isPending) return;
     
     const deliveryData = prepareDeliveryData();
     if (!deliveryData) {
@@ -482,28 +522,27 @@ export default function SellDetailPage() {
   };
 
   const confirmDelivery = () => {
-    if (!sellId) return;
-    
+    // Guard against double taps: the backend also rejects a second delivery
+    if (!sellId || partialDeliveryMutation.isPending) return;
+
     const deliveryData = prepareDeliveryData();
     if (!deliveryData) return;
-    
+
+    // The confirm modal stays open (button shows a spinner) until the
+    // mutation settles; onSuccess/onError close it.
     partialDeliveryMutation.mutate({
       id: sellId,
       deliveryData,
     });
+  };
+
+  const closeConfirmModal = () => {
+    if (partialDeliveryMutation.isPending) return;
     setShowConfirmModal(false);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'DELIVERED': return '$green9';
-      case 'NOT_APPROVED': return '$orange9';
-      case 'PARTIALLY_DELIVERED': return '$yellow9';
-      case 'APPROVED': return '$blue9';
-      case 'CANCELLED': return '$red9';
-      default: return '$gray9';
-    }
-  };
+  const getStatusColor = (status: string) =>
+    SALE_STATUS_COLORS[status] || AppColors.textMuted;
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -516,13 +555,8 @@ export default function SellDetailPage() {
     }
   };
 
-  const getItemStatusColor = (status: string) => {
-    switch (status) {
-      case 'DELIVERED': return '$green9';
-      case 'PENDING': return '$orange9';
-      default: return '$gray9';
-    }
-  };
+  const getItemStatusColor = (status: string) =>
+    ITEM_STATUS_COLORS[status] || AppColors.textMuted;
 
   const getItemStatusText = (status: string) => {
     switch (status) {
@@ -563,9 +597,9 @@ export default function SellDetailPage() {
   return (
     <YStack flex={1} backgroundColor="$orange1" paddingTop={insets.top}>
       {/* Header */}
-      <Card 
-        backgroundColor="$orange1" 
-        borderBottomWidth={1} 
+      <Card
+        backgroundColor="white"
+        borderBottomWidth={1}
         borderBottomColor="$orange4"
         borderRadius={0}
         padding="$4"
@@ -608,7 +642,7 @@ export default function SellDetailPage() {
       >
         <YStack space="$4">
           {/* Sale Information Card */}
-          <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
+          <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$4" borderRadius="$4">
             <YStack space="$3">
               <H4 color="$orange12" borderBottomWidth={1} borderBottomColor="$orange4" paddingBottom="$2">
                 Sale Information
@@ -651,7 +685,7 @@ export default function SellDetailPage() {
           </Card>
 
           {/* Items List with Batch Management */}
-          <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
+          <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$4" borderRadius="$4">
             <H4 color="$orange12" marginBottom="$3">Order Items</H4>
             <YStack space="$4">
               {sell.items?.map((item, index) => {
@@ -660,7 +694,7 @@ export default function SellDetailPage() {
                 const isFullyAllocated = isItemFullyAllocated(item.id, item.quantity);
                 
                 return (
-                  <Card key={item.id} backgroundColor="$orange1" padding="$3" borderRadius="$3">
+                  <Card key={item.id} backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$3" borderRadius="$3">
                     <YStack space="$3">
                       {/* Item Header with Image */}
                       <XStack space="$3" alignItems="flex-start">
@@ -676,17 +710,22 @@ export default function SellDetailPage() {
                         )}
                         <YStack flex={1}>
                           <Text fontWeight="700" color="$orange12" numberOfLines={2}>
-                            {item.product?.name || `Product ${item.productId?.slice(-8) || 'Unknown'}`}
+                            {getProductName(item)}
                           </Text>
-                          <Text fontSize="$2" color="$orange10">
+                          {getSubProductLabel(item) && (
+                            <Text fontSize="$2" fontWeight="600" color="$orange10" numberOfLines={1}>
+                              {getSubProductLabel(item)}
+                            </Text>
+                          )}
+                          <Text fontSize="$2" color="$orange11">
                             Shop: {item.shop?.name || 'Unknown Shop'}
                           </Text>
-                          <Text fontSize="$2" color="$orange10">
+                          <Text fontSize="$2" color="$orange11">
                             Unit: {item.unitOfMeasure?.name || item.unitOfMeasure?.symbol || 'unit'}
                           </Text>
                           <XStack justifyContent="space-between" marginTop="$2">
-                            <Text fontWeight="700" color="$green10">
-                              ${item.unitPrice?.toFixed(2) || '0.00'}
+                            <Text fontWeight="700" color="$orange10">
+                              {formatMoney(item.unitPrice)}
                             </Text>
                             <Text fontSize="$2" color="$orange10">
                               x{item.quantity || 0}
@@ -708,7 +747,7 @@ export default function SellDetailPage() {
                           </Text>
                         </XStack>
                         <Text fontWeight="600" color="$orange12">
-                          ${item.totalPrice?.toFixed(2) || '0.00'}
+                          {formatMoney(item.totalPrice)}
                         </Text>
                       </XStack>
                       
@@ -783,50 +822,58 @@ export default function SellDetailPage() {
           </Card>
 
           {/* Totals */}
-          <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
+          <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$4" borderRadius="$4">
             <YStack space="$2">
               <XStack justifyContent="space-between">
                 <Text color="$orange11">Subtotal:</Text>
-                <Text color="$orange12">${sell.subTotal?.toFixed(2) || '0.00'}</Text>
+                <Text color="$orange12">{formatMoney(sell.subTotal)}</Text>
               </XStack>
               <XStack justifyContent="space-between">
                 <Text color="$orange11">Discount:</Text>
-                <Text color="$red10">-${sell.discount?.toFixed(2) || '0.00'}</Text>
+                <Text color="$red10">-{formatMoney(sell.discount)}</Text>
               </XStack>
               <XStack justifyContent="space-between">
                 <Text color="$orange11">VAT:</Text>
-                <Text color="$orange12">${sell.vat?.toFixed(2) || '0.00'}</Text>
+                <Text color="$orange12">{formatMoney(sell.vat)}</Text>
               </XStack>
               <XStack justifyContent="space-between" borderTopWidth={1} borderTopColor="$orange4" paddingTop="$2">
                 <Text fontWeight="700" color="$orange12" fontSize="$5">Grand Total:</Text>
-                <Text fontWeight="700" color="$green10" fontSize="$5">
-                  ${sell.grandTotal?.toFixed(2) || '0.00'}
+                <Text fontWeight="700" color="$orange10" fontSize="$5">
+                  {formatMoney(sell.grandTotal)}
                 </Text>
               </XStack>
+              {sell.NetTotal != null && (
+                <XStack justifyContent="space-between">
+                  <Text color="$orange11">Net Total:</Text>
+                  <Text color="$orange12">{formatMoney(sell.NetTotal)}</Text>
+                </XStack>
+              )}
             </YStack>
           </Card>
 
           {/* Delivery Action */}
        {(sell.saleStatus === 'APPROVED' || sell.saleStatus === 'PARTIALLY_DELIVERED') && 
  sell.items?.some(item => item.itemSaleStatus === 'PENDING') && (
-  <Card backgroundColor="$green2" padding="$4" borderRadius="$4">
+  <Card backgroundColor="$orange2" borderColor="$orange5" borderWidth={1} padding="$4" borderRadius="$4">
     <YStack space="$3" alignItems="center">
-      <H4 color="$green12">
+      <H4 color="$orange12">
         {sell.saleStatus === 'PARTIALLY_DELIVERED' ? 'Continue Delivery' : 'Ready for Delivery'}
       </H4>
-      <Text color="$green11" textAlign="center">
-        {sell.saleStatus === 'PARTIALLY_DELIVERED' 
+      <Text color="$orange11" textAlign="center">
+        {sell.saleStatus === 'PARTIALLY_DELIVERED'
           ? 'Some items are still pending. Allocate remaining batches and submit for delivery.'
           : 'Allocate batches for all items, then submit for delivery.'}
       </Text>
       <Button
         size="$4"
-        backgroundColor="$green9"
-        borderColor="$green10"
+        backgroundColor="$orange9"
+        borderColor="$orange9"
         borderWidth={1}
         borderRadius="$4"
+        pressStyle={{ backgroundColor: "$orange10" }}
         onPress={handleSubmitDelivery}
         disabled={deliveryProcessing}
+        opacity={deliveryProcessing ? 0.7 : 1}
       >
         {deliveryProcessing ? (
           <Spinner size="small" color="white" />
@@ -924,7 +971,7 @@ export default function SellDetailPage() {
                       
                       {/* Product Information with Image */}
                       {activeItem && (
-                        <Card backgroundColor="$blue1" padding="$3" borderRadius="$3">
+                        <Card backgroundColor="$orange2" borderColor="$orange5" borderWidth={1} padding="$3" borderRadius="$3">
                           <XStack space="$3" alignItems="center">
                             {getProductImageUrl && (
                               <Image
@@ -937,14 +984,20 @@ export default function SellDetailPage() {
                               />
                             )}
                             <YStack flex={1}>
-                              <Text fontWeight="700" color="$blue12" numberOfLines={2}>
-                                {activeItem.product?.name || `Product ${activeItem.productId?.slice(-8) || 'Unknown'}`}
+                              <Text fontWeight="700" color="$orange12" numberOfLines={2}>
+                                {getProductName(activeItem)}
+                                {getSubProductLabel(activeItem) ? ` — ${getSubProductLabel(activeItem)}` : ''}
                               </Text>
+                              {activeItem.shop?.name ? (
+                                <Text fontSize="$2" color="$orange11" numberOfLines={1}>
+                                  Shop: {activeItem.shop.name}
+                                </Text>
+                              ) : null}
                               <XStack justifyContent="space-between" marginTop="$1">
-                                <Text fontSize="$2" color="$blue11">
+                                <Text fontSize="$2" color="$orange11">
                                   Needed: {activeItem.quantity} units
                                 </Text>
-                                <Text fontSize="$2" color="$blue11" fontWeight="600">
+                                <Text fontSize="$2" color="$orange10" fontWeight="600">
                                   Remaining: {getRemainingQuantityNeeded} units
                                 </Text>
                               </XStack>
@@ -986,7 +1039,7 @@ export default function SellDetailPage() {
   const exceedsRemaining = enteredQuantity > remainingNeeded;
   
   return (
-    <Card key={batch.id} backgroundColor="$orange2" padding="$3" borderRadius="$3">
+    <Card key={batch.id} backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$3" borderRadius="$3">
       <YStack space="$3">
         <XStack justifyContent="space-between" alignItems="center">
           <YStack flex={1}>
@@ -1133,32 +1186,54 @@ export default function SellDetailPage() {
         visible={showConfirmModal}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setShowConfirmModal(false)}
+        onRequestClose={closeConfirmModal}
       >
-        <TouchableWithoutFeedback onPress={() => setShowConfirmModal(false)}>
+        <TouchableWithoutFeedback onPress={closeConfirmModal}>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <TouchableWithoutFeedback>
-              <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$4" width="85%" maxWidth={400}>
+              <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} borderRadius="$4" padding="$4" width="85%" maxWidth={400}>
                 <YStack space="$3">
                   <H4 color="$orange12">Confirm Delivery</H4>
                   <Text color="$orange11">
                     Are you sure you want to submit this delivery? This action cannot be undone.
                   </Text>
+                  {/* Items included in this delivery */}
+                  <YStack space="$1">
+                    {sell.items
+                      ?.filter(item => getTotalSelectedQuantity(item.id) > 0)
+                      .map(item => {
+                        const subLabel = getSubProductLabel(item);
+                        return (
+                          <XStack key={item.id} justifyContent="space-between" space="$2">
+                            <Text flex={1} fontSize="$2" color="$orange12" numberOfLines={2}>
+                              {getProductName(item)}
+                              {subLabel ? ` — ${subLabel}` : ''}
+                            </Text>
+                            <Text fontSize="$2" fontWeight="600" color="$orange10">
+                              {getTotalSelectedQuantity(item.id)}/{item.quantity}
+                            </Text>
+                          </XStack>
+                        );
+                      })}
+                  </YStack>
                   <XStack space="$3" marginTop="$4">
                     <Button
                       flex={1}
                       backgroundColor="$orange3"
                       borderColor="$orange6"
-                      onPress={() => setShowConfirmModal(false)}
+                      onPress={closeConfirmModal}
+                      disabled={deliveryProcessing}
                     >
                       <Text color="$orange11">Cancel</Text>
                     </Button>
                     <Button
                       flex={1}
-                      backgroundColor="$green9"
-                      borderColor="$green10"
+                      backgroundColor="$orange9"
+                      borderColor="$orange9"
+                      pressStyle={{ backgroundColor: "$orange10" }}
                       onPress={confirmDelivery}
                       disabled={deliveryProcessing}
+                      opacity={deliveryProcessing ? 0.7 : 1}
                     >
                       {deliveryProcessing ? (
                         <Spinner size="small" color="white" />

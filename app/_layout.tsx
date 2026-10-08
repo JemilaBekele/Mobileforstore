@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { View, Text } from 'react-native';
 import { useSocketSafe } from '@/(redux)/useSocket';
+import { AppColors } from '@/constants/colors';
 
 // Create queryClient directly to avoid import issues
 const queryClient = new QueryClient({
@@ -43,19 +44,19 @@ function AppContent() {
     <>
       {/* Show connection status only when user is ready */}
       {isUserReady && !isConnected() && (
-        <View style={{ backgroundColor: 'red', padding: 8 }}>
+        <View style={{ backgroundColor: AppColors.error, padding: 8 }}>
           <Text style={{ color: 'white', textAlign: 'center', fontSize: 12 }}>
             🔴 Disconnected from server
           </Text>
         </View>
       )}
       
-      <Stack>
+      <Stack screenOptions={{ contentStyle: { backgroundColor: AppColors.surface } }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="index" options={{ headerShown: false }} />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style="dark" backgroundColor="#FFFFFF" />
     </>
   );
 }
@@ -78,7 +79,7 @@ export default function RootLayout() {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        <TamaguiProvider config={config}>
+        <TamaguiProvider config={config} defaultTheme="light">
           <AppContent />
         </TamaguiProvider>
       </QueryClientProvider>

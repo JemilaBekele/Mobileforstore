@@ -4,27 +4,23 @@
  */
 
 import { Platform } from 'react-native';
+import { AppColors } from './colors';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+export { AppColors };
+
+// White and orange in both modes, like the e-commerce app
+const lightColors = {
+  text: AppColors.textPrimary,
+  background: AppColors.surface,
+  tint: AppColors.primary,
+  icon: AppColors.textSecondary,
+  tabIconDefault: AppColors.textMuted,
+  tabIconSelected: AppColors.primary,
+};
 
 export const Colors = {
-  light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-  },
-  dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
-  },
+  light: lightColors,
+  dark: lightColors,
 };
 
 export const Fonts = Platform.select({

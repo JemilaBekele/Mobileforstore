@@ -59,17 +59,32 @@ export interface Shop {
   branch: Branch;
 }
 
-export interface ProductBatch {
-  availableQuantity: number;
-  stock: number;
+export interface ShopStockRow {
+  id: string;
+  shopId: string;
+  batchId: string;
   quantity: number;
+  status?: string;
+}
+
+export interface ProductBatch {
   id: string;
   batchNumber: string;
   expiryDate?: string;
-    product?: Product;
-      productId?: string;
+  productId?: string;
+  subProductId?: string | null;
+  product?: Product;
+  // quantity this shop holds of the batch (sum of ShopStock rows)
+  availableQuantity: number;
+  ShopStock?: ShopStockRow[];
+}
 
-
+export interface SubProduct {
+  id: string;
+  name: string;
+  subProductCode?: string;
+  sellPrice?: number | null;
+  imageUrl?: string;
 }
 
 // Add Product interface
@@ -98,6 +113,10 @@ export interface SellItem {
 
   productId: string;
   product: Product;
+
+  // set when the line is for a sub-product (e.g. a size or flavour)
+  subProductId?: string | null;
+  subProduct?: SubProduct | null;
 
   shopId: string;
   shop: Shop;

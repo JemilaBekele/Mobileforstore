@@ -43,16 +43,16 @@ const Profile = () => {
     try {
       setIsLoggingOut(true);
       setShowLogoutModal(false);
-      
+
       await dispatch(logout()).unwrap();
-      
+
       // Simply replace with the root screen - no dismissAll needed
       router.replace("/(auth)/login");
-      
+
     } catch (error: any) {
       console.error("Logout process error:", error);
       dispatch(logoutAction());
-      
+
       // Force redirect even if logout fails
       router.replace("/(auth)/login");
     } finally {
@@ -61,12 +61,12 @@ const Profile = () => {
   };
 
   // FIXED: ProfileMenuItem component with proper text wrapping
-  const ProfileMenuItem = ({ 
-    icon, 
-    title, 
-    onPress, 
+  const ProfileMenuItem = ({
+    icon,
+    title,
+    onPress,
     isDestructive = false,
-    showArrow = true 
+    showArrow = true
   }: {
     icon: string;
     title: string;
@@ -75,12 +75,13 @@ const Profile = () => {
     showArrow?: boolean;
   }) => (
     <Card
-      elevate
       bordered
-      borderRadius="$4"
+      borderRadius="$5"
       backgroundColor="$orange1"
       borderColor="$orange4"
-      marginVertical="$2"
+      borderWidth={1}
+      marginVertical="$1"
+      pressStyle={{ backgroundColor: '$orange2' }}
     >
       <Card.Header padded>
         <Button
@@ -95,22 +96,31 @@ const Profile = () => {
         >
           <XStack alignItems="center" space="$3">
             {/* FIX: Ensure the icon is properly wrapped in Text component */}
-            <Text fontSize="$5" color={isDestructive ? "$red9" : "$orange9"}>
-              {icon}
-            </Text>
-            <Text 
-              fontSize="$5" 
-              color={isDestructive ? "$red11" : "$orange11"}
+            <YStack
+              width={40}
+              height={40}
+              borderRadius={20}
+              alignItems="center"
+              justifyContent="center"
+              backgroundColor={isDestructive ? "$red2" : "$orange2"}
+            >
+              <Text fontSize="$5" color={isDestructive ? "$red9" : "$orange9"}>
+                {icon}
+              </Text>
+            </YStack>
+            <Text
+              fontSize="$5"
+              color={isDestructive ? "$red10" : "$orange12"}
               fontWeight="600"
             >
               {title}
             </Text>
           </XStack>
-          {showArrow && (
-            <Text fontSize="$4" color="$orange8">
+          {showArrow ? (
+            <Text fontSize="$6" color="$orange9">
               ›
             </Text>
-          )}
+          ) : null}
         </Button>
       </Card.Header>
     </Card>
@@ -118,10 +128,10 @@ const Profile = () => {
 
   const UserInfoCard = ({ label, value }: { label: string; value: string }) => (
     <XStack justifyContent="space-between" alignItems="center" paddingVertical="$2">
-      <Text fontSize="$4" fontWeight="600" color="$orange11">
+      <Text fontSize="$4" fontWeight="500" color="$orange11">
         {label}
       </Text>
-      <Text fontSize="$4" color="$orange12" fontWeight="500">
+      <Text fontSize="$4" color="$orange12" fontWeight="700">
         {value}
       </Text>
     </XStack>
@@ -146,41 +156,47 @@ const Profile = () => {
       <ScrollView flex={1} showsVerticalScrollIndicator={false}>
         <YStack space="$4" padding="$4">
           {/* Profile Header */}
-          <Card 
-            elevate 
-            bordered 
-            borderRadius="$4" 
+          <Card
+            bordered
+            borderRadius="$5"
             backgroundColor="$orange1"
             borderColor="$orange4"
-            shadowColor="$orange7"
+            borderWidth={1}
+            overflow="hidden"
           >
+            {/* orange accent strip */}
+            <YStack height={6} backgroundColor="$orange9" />
             <Card.Header padded>
               <YStack space="$4" alignItems="center">
-                <Avatar circular size="$14" backgroundColor="$orange5">
+                <Avatar circular size="$12" backgroundColor="$orange2" borderWidth={3} borderColor="$orange9">
                   <Avatar.Image
                     source={{ uri: 'https://th.bing.com/th/id/OIP.fFF1AOaet4ZcLFBIfM9SGAHaHa?pid=ImgDet&w=191&h=191&c=7' }}
                   />
-                  <Avatar.Fallback backgroundColor="$orange6">
-                    <Text color="$orange11" fontSize="$6" fontWeight="bold">
+                  <Avatar.Fallback backgroundColor="$orange2">
+                    <Text color="$orange9" fontSize="$8" fontWeight="bold">
                       {fullName.charAt(0).toUpperCase()}
                     </Text>
                   </Avatar.Fallback>
                 </Avatar>
-                
+
                 <YStack alignItems="center" space="$2">
-                  <H3 fontWeight="bold" color="$orange12" textAlign="center">
+                  <H3 fontWeight="800" color="$orange12" textAlign="center">
                     {fullName}
                   </H3>
-                  <Text fontSize="$4" color="$orange10" textAlign="center">
-                    {email}
-                  </Text>
+                  {email ? (
+                    <Text fontSize="$4" color="$orange11" textAlign="center">
+                      {email}
+                    </Text>
+                  ) : null}
                 </YStack>
 
                 {/* User Details */}
-                <Card 
-                  width="100%" 
-                  backgroundColor="$orange2" 
-                  borderRadius="$3" 
+                <Card
+                  width="100%"
+                  backgroundColor="$orange1"
+                  borderColor="$orange4"
+                  borderWidth={1}
+                  borderRadius="$4"
                   padding="$3"
                 >
                   <YStack space="$1">
@@ -196,7 +212,7 @@ const Profile = () => {
 
           {/* Menu Section */}
           <YStack space="$3">
-            <Text fontSize="$6" fontWeight="700" color="$orange12" paddingHorizontal="$2">
+            <Text fontSize="$5" fontWeight="800" color="$orange12" paddingHorizontal="$1">
               Account Settings
             </Text>
 
@@ -232,10 +248,10 @@ const Profile = () => {
         onRequestClose={() => !isLoggingOut && setShowLogoutModal(false)}
       >
         <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="rgba(0,0,0,0.5)">
-          <Card 
-            backgroundColor="$orange1" 
-            borderRadius="$4" 
-            padding="$4" 
+          <Card
+            backgroundColor="$orange1"
+            borderRadius="$6"
+            padding="$5"
             margin="$4"
             borderColor="$orange4"
             borderWidth={1}
@@ -246,7 +262,7 @@ const Profile = () => {
               <Text fontSize="$6" fontWeight="700" color="$orange12" textAlign="center">
                 Log Out?
               </Text>
-              
+
               <Text fontSize="$4" color="$orange11" textAlign="center" lineHeight="$1">
                 Are you sure you want to log out of your account?
               </Text>
@@ -254,19 +270,19 @@ const Profile = () => {
               <XStack space="$3" marginTop="$4" width="100%">
                 <Button
                   flex={1}
-                  backgroundColor="$orange3"
-                  borderColor="$orange6"
+                  backgroundColor="$orange1"
+                  borderColor="$orange9"
                   borderWidth={1}
                   borderRadius="$4"
                   onPress={() => setShowLogoutModal(false)}
-                  pressStyle={{ backgroundColor: "$orange4" }}
+                  pressStyle={{ backgroundColor: "$orange2" }}
                   disabled={isLoggingOut}
                 >
-                  <Text color="$orange11" fontWeight="600">
+                  <Text color="$orange9" fontWeight="700">
                     Cancel
                   </Text>
                 </Button>
-                
+
                 <Button
                   flex={1}
                   backgroundColor="$red9"

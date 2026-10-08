@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { View, Text } from 'react-native';
 import { useSocketSafe } from '@/(redux)/useSocket';
 import { AppColors } from '@/constants/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Create queryClient directly to avoid import issues
 const queryClient = new QueryClient({
@@ -51,11 +52,13 @@ function AppContent() {
         </View>
       )}
       
-      <Stack screenOptions={{ contentStyle: { backgroundColor: AppColors.surface } }}>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-      </Stack>
+      <SafeAreaView style={{ flex: 1, backgroundColor: AppColors.surface }} edges={['top']}>
+        <Stack screenOptions={{ contentStyle: { backgroundColor: AppColors.surface } }}>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+        </Stack>
+      </SafeAreaView>
       <StatusBar style="dark" backgroundColor="#FFFFFF" />
     </>
   );

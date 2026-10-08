@@ -649,7 +649,7 @@ export default function SellDetailPage() {
   }
 
   return (
-    <YStack flex={1} backgroundColor="white" paddingTop={insets.top}>
+    <YStack flex={1} backgroundColor="white">
       {/* Header */}
       <XStack
         backgroundColor="white"

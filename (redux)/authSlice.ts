@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { loginUser, getUserById, updateUserById, changePassword } from "@/(services)/api/api";
 import { saveToStorage, loadFromStorage, removeFromStorage } from "@/(utils)/storage";
+import api from "@/(utils)/config";
 
 export const loadUser = createAsyncThunk("auth/loadUser", async (_, { rejectWithValue }) => {
   try {
@@ -11,6 +12,31 @@ export const loadUser = createAsyncThunk("auth/loadUser", async (_, { rejectWith
     return rejectWithValue("Error loading user");
   }
 });
+
+// Keep the user signed in between app launches: reuse the saved token and
+// user while the server still accepts the token. Only a 401/403 (expired or
+// revoked token) clears it; without network the saved session is kept.
+export const restoreSession = createAsyncThunk(
+  "auth/restoreSession",
+  async (_, { rejectWithValue }) => {
+    const token = await loadFromStorage("authToken");
+    const user = await loadFromStorage("userInfo");
+    if (!token || !user) return rejectWithValue("No saved session");
+
+    try {
+      await api.get("/users/Usermy/data", { skipAuthRedirect: true } as any);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        await removeFromStorage("authToken");
+        await removeFromStorage("userInfo");
+        return rejectWithValue("Session expired");
+      }
+      // network or server error: stay signed in with the saved session
+    }
+    return { token, user };
+  }
+);
 
 export const login = createAsyncThunk(
   "auth/login",
@@ -191,6 +217,18 @@ const authSlice = createSlice({
       .addCase(login.pending, (state) => {
         state.loading = true;
         state.error = null;
+      })
+      .addCase(restoreSession.fulfilled, (state, action: PayloadAction<{ token: string; user: User }>) => {
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.isAuthenticated = true;
+        state.loading = false;
+      })
+      .addCase(restoreSession.rejected, (state) => {
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.loading = false;
       })
       .addCase(login.fulfilled, (state, action: PayloadAction<{ token: string; user: User }>) => {
         state.user = action.payload.user;

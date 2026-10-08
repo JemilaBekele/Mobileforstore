@@ -1,12 +1,12 @@
 // app/(auth)/login.tsx
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Image, KeyboardAvoidingView, Platform } from "react-native";
 import { Formik, FormikProps } from "formik";
 import * as Yup from "yup";
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/(redux)/store";
-import { login } from "@/(redux)/authSlice";
+import { login, restoreSession } from "@/(redux)/authSlice";
 import { AppColors } from "@/constants/colors";
 import {
   Card,
@@ -38,6 +38,23 @@ export default function LoginScreen() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // true while checking for a saved login from a previous launch
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    dispatch(restoreSession())
+      .unwrap()
+      .then(() => {
+        if (active) router.replace("/(tabs)/home" as any);
+      })
+      .catch(() => {
+        if (active) setCheckingSession(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [dispatch, router]);
 
   const handleLogin = async (values: { email: string; password: string }) => {
     setMessage("");
@@ -81,6 +98,14 @@ export default function LoginScreen() {
   };
 
   const messageStyles = getMessageStyles();
+
+  if (checkingSession) {
+    return (
+      <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor="#FFFFFF">
+        <Spinner size="large" color={AppColors.primary} />
+      </YStack>
+    );
+  }
 
   return (
     <KeyboardAvoidingView

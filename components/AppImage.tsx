@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Image, View, type ImageResizeMode } from 'react-native';
+import { Image, Pressable, View, type ImageResizeMode } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getImageUrl } from '@/(utils)/image';
+import ImageViewer from './ImageViewer';
 
 type AppImageProps = {
   // stored path ("uploads\product_images\x.webp") or a full URL
@@ -12,6 +13,10 @@ type AppImageProps = {
   radius?: number;
   resizeMode?: ImageResizeMode;
   bordered?: boolean;
+  // tap to open the image full screen (no effect when there is no image)
+  zoomable?: boolean;
+  // caption under the full-screen image
+  title?: string;
 };
 
 // Product/category image with a grey placeholder when there is no image or
@@ -24,9 +29,12 @@ export default function AppImage({
   radius = 12,
   resizeMode = 'cover',
   bordered = false,
+  zoomable = false,
+  title,
 }: AppImageProps) {
   const uri = getImageUrl(path);
   const [failed, setFailed] = useState(false);
+  const [viewing, setViewing] = useState(false);
 
   useEffect(() => {
     setFailed(false);
@@ -50,7 +58,7 @@ export default function AppImage({
     );
   }
 
-  return (
+  const image = (
     <View style={frame}>
       <Image
         source={{ uri }}
@@ -59,5 +67,16 @@ export default function AppImage({
         onError={() => setFailed(true)}
       />
     </View>
+  );
+
+  if (!zoomable) return image;
+
+  return (
+    <>
+      <Pressable onPress={() => setViewing(true)} accessibilityRole="imagebutton" accessibilityLabel="View image">
+        {image}
+      </Pressable>
+      <ImageViewer uri={uri} title={title} visible={viewing} onClose={() => setViewing(false)} />
+    </>
   );
 }

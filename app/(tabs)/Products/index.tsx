@@ -37,7 +37,7 @@ import {
   ProductSubProduct,
 } from '@/(services)/api/product';
 import { formatMoney, formatQty, toNumber } from '@/(utils)/format';
-import { normalizeImagePath } from '@/(utils)/image';
+import AppImage from '@/components/AppImage';
 
 // Presentation palette for this screen (white, black text, orange accent)
 const C = {
@@ -444,9 +444,6 @@ const ProductCard = ({
     return getShopStockFromBranchStocks(product, selectedShopId, shops);
   }, [product, selectedShopId, shops]);
 
-  // Get normalized image URL
-  const productImageUrl = normalizeImagePath(product.imageUrl);
-
   return (
     <YStack
       backgroundColor="white"
@@ -463,36 +460,7 @@ const ProductCard = ({
       {/* Product Image and Header */}
       <XStack gap={12}>
         {/* Product Image */}
-        {productImageUrl ? (
-          <YStack
-            width={72}
-            height={72}
-            borderRadius={12}
-            overflow="hidden"
-            backgroundColor={C.subtle}
-            borderWidth={1}
-            borderColor={C.border}
-          >
-            <Image
-              source={{ uri: productImageUrl }}
-              style={{ width: '100%', height: '100%' }}
-              resizeMode="cover"
-            />
-          </YStack>
-        ) : (
-          <YStack
-            width={72}
-            height={72}
-            borderRadius={12}
-            backgroundColor={C.subtle}
-            borderWidth={1}
-            borderColor={C.border}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Ionicons name="cube-outline" size={28} color={C.placeholder} />
-          </YStack>
-        )}
+        <AppImage path={product.imageUrl} size={72} radius={12} bordered zoomable title={product.name} />
 
         {/* Product Info */}
         <YStack flex={1} gap={4}>
@@ -919,7 +887,6 @@ const InfoRow = ({ label, children }: { label: string; children: React.ReactNode
 const SubProductRow = ({ subProduct, product }: { subProduct: ProductSubProduct; product: Product }) => {
   const usesProductPrice = subProduct.sellPrice === null || subProduct.sellPrice === undefined;
   const ownPrices = (product.AdditionalPrice || []).filter(ap => ap.subProductId === subProduct.id);
-  const subImageUrl = normalizeImagePath(subProduct.imageUrl);
 
   return (
     <YStack
@@ -931,10 +898,8 @@ const SubProductRow = ({ subProduct, product }: { subProduct: ProductSubProduct;
       gap={8}
     >
       <XStack gap={8} alignItems="flex-start">
-        {subImageUrl ? (
-          <YStack width={44} height={44} borderRadius={8} overflow="hidden" backgroundColor={C.subtle}>
-            <Image source={{ uri: subImageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-          </YStack>
+        {subProduct.imageUrl ? (
+          <AppImage path={subProduct.imageUrl} size={44} radius={8} zoomable title={subProduct.name} />
         ) : null}
         <YStack flex={1} gap={2}>
           <Text fontWeight="700" color={C.text} numberOfLines={2}>

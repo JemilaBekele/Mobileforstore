@@ -29,7 +29,7 @@ import {
   partialSaleDelivery,
 } from '@/(services)/api/sell';
 import { formatMoney } from '@/(utils)/format';
-import { normalizeImagePath } from '@/(utils)/image';
+import AppImage from '@/components/AppImage';
 
 // Presentation palette (white, black text, orange accent) - same as the sales app
 const C = {
@@ -245,13 +245,6 @@ export default function SellDetailPage() {
     const totalSelected = getTotalSelectedQuantity(activeItem.id);
     return Math.max(0, activeItem.quantity - totalSelected);
   }, [activeItem, getTotalSelectedQuantity]);
-
-  // Get product image URL
-  const getProductImageUrl = useMemo(() => {
-    const imageUrl = activeItem?.subProduct?.imageUrl || activeItem?.product?.imageUrl;
-    if (!imageUrl) return null;
-    return normalizeImagePath(imageUrl);
-  }, [activeItem]);
 
   // Calculate available quantity considering already selected batches
   const getAvailableQuantityForBatch = useMemo(() => (batch: ProductBatch) => {
@@ -745,16 +738,7 @@ export default function SellDetailPage() {
                 >
                   {/* Item Header with Image */}
                   <XStack gap={12} alignItems="flex-start">
-                    {item.product?.imageUrl ? (
-                      <Image
-                        source={{ uri: normalizeImagePath(item.product.imageUrl) }}
-                        width={72}
-                        height={72}
-                        borderRadius={10}
-                        resizeMode="cover"
-                        backgroundColor={C.subtle}
-                      />
-                    ) : null}
+                    <AppImage path={item.subProduct?.imageUrl || item.product?.imageUrl} size={72} radius={10} zoomable title={getProductName(item)} />
                     <YStack flex={1} gap={2}>
                       <Text fontWeight="700" color={C.text} numberOfLines={2}>
                         {getProductName(item)}
@@ -1041,16 +1025,7 @@ export default function SellDetailPage() {
                           padding={12}
                           backgroundColor={C.subtle}
                         >
-                          {getProductImageUrl ? (
-                            <Image
-                              source={{ uri: getProductImageUrl }}
-                              width={56}
-                              height={56}
-                              borderRadius={8}
-                              resizeMode="cover"
-                              backgroundColor="white"
-                            />
-                          ) : null}
+                          <AppImage path={activeItem?.subProduct?.imageUrl || activeItem?.product?.imageUrl} size={56} radius={8} zoomable title={getProductName(activeItem)} />
                           <YStack flex={1} gap={2}>
                             <Text fontWeight="700" color={C.text} numberOfLines={2}>
                               {getProductName(activeItem)}

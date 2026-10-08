@@ -9,20 +9,20 @@ const headingFont = createInterFont()
 const bodyFont = createInterFont()
 
 // The screens are built on the $orange1..$orange12 scale. Remap it to the
-// white-and-orange look of the e-commerce app: white pages, light orange
-// tints, slate text and #FF6B00 as the brand orange.
+// same look as the sales app: white pages, black/grey text, grey borders
+// and #FF6B00 orange only for actions and highlights.
 const brandOrange = {
-  orange1: AppColors.surface, // page and card background
-  orange2: AppColors.primaryLight, // inner cards, chips
-  orange3: AppColors.primaryContainer, // highlighted areas
-  orange4: AppColors.border, // light borders
+  orange1: AppColors.background, // page and card background
+  orange2: AppColors.surfaceMuted, // inner panels (neutral)
+  orange3: AppColors.primaryLight, // light orange tint for selected/highlight
+  orange4: AppColors.border, // light grey borders
   orange5: AppColors.border,
-  orange6: '#FED7AA', // orange borders
-  orange7: '#FDBA74',
+  orange6: AppColors.primaryMuted, // orange borders
+  orange7: AppColors.borderStrong, // neutral shadows
   orange8: AppColors.primaryGradientEnd,
   orange9: AppColors.primary, // buttons, active elements
-  orange10: AppColors.secondary, // accents, icons
-  orange11: AppColors.textSecondaryStrong, // labels, section titles
+  orange10: AppColors.primaryDark, // accents, icons
+  orange11: AppColors.textSecondaryStrong, // labels
   orange12: AppColors.textPrimary, // main text
 }
 

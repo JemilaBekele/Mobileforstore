@@ -8,15 +8,12 @@ import {
   Image,
 } from 'react-native';
 import {
-  Card,
   Text,
   XStack,
   YStack,
   Button,
   ScrollView,
   Spinner,
-  H4,
-  H3,
   Input,
   Fieldset,
   Label,
@@ -24,6 +21,7 @@ import {
   Progress,
 } from 'tamagui';
 import { useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 // Import React Query hooks and types
 import {
@@ -39,42 +37,143 @@ import {
   ProductSubProduct,
 } from '@/(services)/api/product';
 import { formatMoney, formatQty, toNumber } from '@/(utils)/format';
+import { normalizeImagePath } from '@/(utils)/image';
 
-const BACKEND_URL = "https://ordere.net";
-
-export const normalizeImagePath = (path?: string) => {
-  if (!path) return undefined;
-  const normalizedPath = path.replace(/\\/g, '/');
-  if (normalizedPath.startsWith('http')) {
-    return normalizedPath;
-  }
-  const cleanPath = normalizedPath.replace(/^\/+/, '');
-  return `${BACKEND_URL}/${cleanPath}`;
+// Presentation palette for this screen (white, black text, orange accent)
+const C = {
+  accent: '#FF6B00',
+  accentTint: '#FFF7ED',
+  text: '#111827',
+  label: '#374151',
+  muted: '#6B7280',
+  placeholder: '#9CA3AF',
+  border: '#E5E7EB',
+  subtle: '#F9FAFB',
+  danger: '#DC2626',
 };
 
-// Custom Badge Component
-const Badge = ({
+const softShadow = {
+  shadowColor: '#000',
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  shadowOffset: { width: 0, height: 1 },
+} as const;
+
+const inputStyle = {
+  backgroundColor: 'white',
+  borderColor: C.border,
+  borderWidth: 1,
+  borderRadius: 10,
+  color: C.text,
+  placeholderTextColor: C.placeholder,
+  focusStyle: { borderColor: C.accent },
+} as const;
+
+// Small tinted pill
+type PillTone = 'neutral' | 'accent' | 'green' | 'amber' | 'red';
+const PILL_TONES: Record<PillTone, { bg: string; fg: string }> = {
+  neutral: { bg: '#F3F4F6', fg: '#374151' },
+  accent: { bg: '#FFF7ED', fg: '#C2410C' },
+  green: { bg: '#DCFCE7', fg: '#166534' },
+  amber: { bg: '#FEF3C7', fg: '#92400E' },
+  red: { bg: '#FEE2E2', fg: '#991B1B' },
+};
+
+const Pill = ({
   children,
-  backgroundColor,
-  ...props
+  tone = 'neutral',
+  icon,
 }: {
   children: React.ReactNode;
-  backgroundColor: string;
-  [key: string]: any;
+  tone?: PillTone;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+}) => {
+  const { bg, fg } = PILL_TONES[tone];
+  return (
+    <XStack
+      backgroundColor={bg}
+      paddingHorizontal={8}
+      paddingVertical={2}
+      borderRadius={999}
+      alignItems="center"
+      gap={4}
+    >
+      {icon ? <Ionicons name={icon} size={12} color={fg} /> : null}
+      <Text fontSize={12} fontWeight="600" color={fg}>
+        {children}
+      </Text>
+    </XStack>
+  );
+};
+
+const LabelText = ({ children }: { children: React.ReactNode }) => (
+  <Label fontSize={13} fontWeight="600" color={C.label} lineHeight={18}>
+    {children}
+  </Label>
+);
+
+const PrimaryButton = ({
+  children,
+  onPress,
+  flex,
+}: {
+  children: React.ReactNode;
+  onPress: () => void;
+  flex?: number;
 }) => (
-  <YStack
-    backgroundColor={backgroundColor}
-    paddingHorizontal="$2"
-    paddingVertical="$1"
-    borderRadius="$2"
-    alignItems="center"
-    justifyContent="center"
-    {...props}
+  <Button
+    flex={flex}
+    backgroundColor={C.accent}
+    borderWidth={0}
+    borderRadius={10}
+    onPress={onPress}
+    pressStyle={{ backgroundColor: '$orange10' }}
   >
-    <Text fontSize="$1" fontWeight="700" color="white">
-      {children}
+    <Text color="white" fontWeight="700">{children}</Text>
+  </Button>
+);
+
+const SecondaryButton = ({
+  children,
+  onPress,
+  flex,
+  icon,
+}: {
+  children: React.ReactNode;
+  onPress: () => void;
+  flex?: number;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+}) => (
+  <Button
+    flex={flex}
+    backgroundColor="white"
+    borderColor={C.border}
+    borderWidth={1}
+    borderRadius={10}
+    onPress={onPress}
+    pressStyle={{ backgroundColor: C.subtle, borderColor: C.border }}
+    icon={icon ? <Ionicons name={icon} size={16} color={C.accent} /> : undefined}
+  >
+    <Text color={C.text} fontWeight="600">{children}</Text>
+  </Button>
+);
+
+const ModalTitle = ({ title, onClose }: { title: string; onClose?: () => void }) => (
+  <XStack alignItems="center" justifyContent="space-between">
+    <Text color={C.text} fontSize={18} fontWeight="700" flex={1}>
+      {title}
     </Text>
-  </YStack>
+    {onClose ? (
+      <Button
+        size="$2"
+        circular
+        chromeless
+        borderWidth={0}
+        onPress={onClose}
+        icon={<Ionicons name="close" size={20} color={C.muted} />}
+      />
+    ) : null}
+  </XStack>
 );
 
 // Custom Select Component to replace Tamagui Select
@@ -95,28 +194,31 @@ const CustomSelect = ({
 
   return (
     <YStack>
-      <Button
+      <XStack
         onPress={() => setShowOptions(true)}
-        backgroundColor="$orange1"
-        borderColor="$orange5"
+        backgroundColor="white"
+        borderColor={C.border}
         borderWidth={1}
-        borderRadius="$3"
+        borderRadius={10}
+        alignItems="center"
         justifyContent="space-between"
-        paddingHorizontal="$3"
-        paddingVertical="$2"
+        paddingHorizontal={12}
+        height={44}
+        pressStyle={{ backgroundColor: C.subtle }}
+        cursor="pointer"
       >
         <Text
-          color={value ? "$orange12" : "$orange11"}
-          fontWeight="600"
-          fontSize="$3"
+          color={selectedOption ? C.text : C.placeholder}
+          fontWeight="500"
+          fontSize={14}
           numberOfLines={1}
           flex={1}
           textAlign="left"
         >
           {selectedOption?.label || placeholder}
         </Text>
-        <Text color="$orange9" fontSize="$2">▼</Text>
-      </Button>
+        <Ionicons name="chevron-down" size={18} color={C.muted} />
+      </XStack>
 
       {showOptions && (
         <Modal
@@ -129,55 +231,59 @@ const CustomSelect = ({
             flex={1}
             justifyContent="center"
             alignItems="center"
-            backgroundColor="rgba(0,0,0,0.5)"
+            backgroundColor="rgba(0,0,0,0.4)"
             padding="$4"
           >
             <YStack
-              backgroundColor="$orange1"
-              borderRadius="$4"
-              padding="$4"
+              backgroundColor="white"
+              borderRadius={16}
+              padding={16}
               width="100%"
               maxWidth={400}
               borderWidth={1}
-              borderColor="$orange4"
+              borderColor={C.border}
             >
-              <YStack space="$3">
-                <H4 textAlign="center" color="$orange12">
-                  {placeholder}
-                </H4>
+              <YStack gap={12}>
+                <ModalTitle title={placeholder} onClose={() => setShowOptions(false)} />
                 <ScrollView maxHeight={300}>
-                  <YStack space="$2">
-                    {options.map((option) => (
-                      <Button
-                        key={option.value}
-                        onPress={() => {
-                          onValueChange(option.value);
-                          setShowOptions(false);
-                        }}
-                        backgroundColor={value === option.value ? "$orange2" : "$orange1"}
-                        borderColor={value === option.value ? "$orange9" : "$orange4"}
-                        borderWidth={1}
-                        borderRadius="$3"
-                      >
-                        <Text
-                          color={value === option.value ? "$orange9" : "$orange12"}
-                          fontWeight="600"
+                  <YStack gap={8}>
+                    {options.map((option) => {
+                      const selected = value === option.value;
+                      return (
+                        <XStack
+                          key={option.value}
+                          onPress={() => {
+                            onValueChange(option.value);
+                            setShowOptions(false);
+                          }}
+                          backgroundColor={selected ? C.accentTint : 'white'}
+                          borderColor={selected ? C.accent : C.border}
+                          borderWidth={1}
+                          borderRadius={12}
+                          paddingHorizontal={12}
+                          paddingVertical={12}
+                          alignItems="center"
+                          gap={12}
+                          pressStyle={{ opacity: 0.8 }}
+                          cursor="pointer"
                         >
-                          {option.label}
-                        </Text>
-                      </Button>
-                    ))}
+                          <Text
+                            flex={1}
+                            fontSize={15}
+                            fontWeight="600"
+                            color={selected ? C.accent : C.text}
+                          >
+                            {option.label}
+                          </Text>
+                          {selected ? (
+                            <Ionicons name="checkmark" size={18} color={C.accent} />
+                          ) : null}
+                        </XStack>
+                      );
+                    })}
                   </YStack>
                 </ScrollView>
-                <Button
-                  backgroundColor="$orange1"
-                  borderColor="$orange9"
-                  borderWidth={1}
-                  borderRadius="$4"
-                  onPress={() => setShowOptions(false)}
-                >
-                  <Text color="$orange9" fontWeight="600">Cancel</Text>
-                </Button>
+                <SecondaryButton onPress={() => setShowOptions(false)}>Cancel</SecondaryButton>
               </YStack>
             </YStack>
           </YStack>
@@ -192,23 +298,11 @@ const CustomSelect = ({
 // means the product has no low-stock alert, only out of stock / in stock.
 const StockBadge = ({ stock, warningQuantity = 0 }: { stock: number; warningQuantity?: number }) => {
   if (stock <= 0) {
-    return (
-      <Badge backgroundColor="$red9">
-        <Text color="white" fontSize="$1" fontWeight="700">Out of Stock</Text>
-      </Badge>
-    );
+    return <Pill tone="red">Out of Stock</Pill>;
   } else if (warningQuantity > 0 && stock <= warningQuantity) {
-    return (
-      <Badge backgroundColor="$orange9">
-        <Text color="white" fontSize="$1" fontWeight="700">Low Stock</Text>
-      </Badge>
-    );
+    return <Pill tone="amber">Low Stock</Pill>;
   } else {
-    return (
-      <Badge backgroundColor="$green9">
-        <Text color="white" fontSize="$1" fontWeight="700">In Stock</Text>
-      </Badge>
-    );
+    return <Pill tone="green">In Stock</Pill>;
   }
 };
 
@@ -234,19 +328,19 @@ const AdditionalPriceChips = ({ prices, align = 'flex-start' }: {
 }) => {
   if (prices.length === 0) return null;
   return (
-    <XStack flexWrap="wrap" gap="$1" justifyContent={align}>
+    <XStack flexWrap="wrap" gap={6} justifyContent={align}>
       {prices.map(ap => (
         <YStack
           key={ap.id}
-          backgroundColor="$orange2"
-          borderColor="$orange6"
+          backgroundColor="white"
+          borderColor={C.border}
           borderWidth={1}
-          borderRadius="$2"
-          paddingHorizontal="$2"
+          borderRadius={999}
+          paddingHorizontal={8}
           paddingVertical={2}
         >
-          <Text fontSize="$1" color="$orange11">
-            {ap.label || 'Alt. price'} · <Text fontSize="$1" fontWeight="700" color="$orange12">{formatMoney(ap.price)}</Text>
+          <Text fontSize={12} color={C.muted}>
+            {ap.label || 'Alt. price'} · <Text fontSize={12} fontWeight="700" color={C.text}>{formatMoney(ap.price)}</Text>
             {ap.shopId ? ` (${ap.shop?.name || 'shop only'})` : ''}
           </Text>
         </YStack>
@@ -264,8 +358,8 @@ const PriceDisplay = ({ price, additionalPrices, shopId }: {
   const options = getApplicablePrices(additionalPrices, { shopId });
 
   return (
-    <YStack alignItems="flex-start" space="$1" flex={1}>
-      <Text fontSize="$5" fontWeight="800" color="$orange9">
+    <YStack alignItems="flex-start" gap={4} flex={1}>
+      <Text fontSize={18} fontWeight="800" color={C.accent}>
         {formatMoney(price)}
       </Text>
       <AdditionalPriceChips prices={options} />
@@ -288,11 +382,9 @@ const BatchExpiryIndicator = ({ batches }: { batches?: BatchStockDetails[] }) =>
   if (expiringBatches.length === 0) return null;
 
   return (
-    <Badge backgroundColor="$yellow9">
-      <Text color="white" fontSize="$1" fontWeight="600">
-        ⚠️ {expiringBatches.length} batch{expiringBatches.length > 1 ? 'es' : ''} expiring
-      </Text>
-    </Badge>
+    <Pill tone="amber" icon="time-outline">
+      {`${expiringBatches.length} batch${expiringBatches.length > 1 ? 'es' : ''} expiring`}
+    </Pill>
   );
 };
 
@@ -356,171 +448,159 @@ const ProductCard = ({
   const productImageUrl = normalizeImagePath(product.imageUrl);
 
   return (
-    <Card
-      bordered
-      borderRadius="$5"
-      backgroundColor="$orange1"
-      borderColor="$orange4"
+    <YStack
+      backgroundColor="white"
       borderWidth={1}
+      borderColor={C.border}
+      borderRadius={14}
+      padding={14}
+      gap={12}
+      {...softShadow}
       onPress={() => onPress(product)}
-      pressStyle={{ backgroundColor: '$orange2' }}
+      pressStyle={{ backgroundColor: '#FAFAFA' }}
+      cursor="pointer"
     >
-      <Card.Header padded>
-        <YStack space="$3">
-          {/* Product Image and Header */}
-          <XStack space="$3">
-            {/* Product Image */}
-            {productImageUrl ? (
-              <YStack
-                width={80}
-                height={80}
-                borderRadius="$4"
-                overflow="hidden"
-                backgroundColor="$orange2"
-                borderWidth={1}
-                borderColor="$orange4"
-              >
-                <Image
-                  source={{ uri: productImageUrl }}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
-                />
-              </YStack>
-            ) : (
-              <YStack
-                width={80}
-                height={80}
-                borderRadius="$4"
-                backgroundColor="$orange2"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text fontSize="$6" color="$orange8">
-                  📦
-                </Text>
-              </YStack>
-            )}
+      {/* Product Image and Header */}
+      <XStack gap={12}>
+        {/* Product Image */}
+        {productImageUrl ? (
+          <YStack
+            width={72}
+            height={72}
+            borderRadius={12}
+            overflow="hidden"
+            backgroundColor={C.subtle}
+            borderWidth={1}
+            borderColor={C.border}
+          >
+            <Image
+              source={{ uri: productImageUrl }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          </YStack>
+        ) : (
+          <YStack
+            width={72}
+            height={72}
+            borderRadius={12}
+            backgroundColor={C.subtle}
+            borderWidth={1}
+            borderColor={C.border}
+            alignItems="center"
+            justifyContent="center"
+          >
+            <Ionicons name="cube-outline" size={28} color={C.placeholder} />
+          </YStack>
+        )}
 
-            {/* Product Info */}
-            <YStack flex={1} space="$2">
-              {/* Product Header */}
-              <XStack justifyContent="space-between" alignItems="flex-start">
-                <YStack flex={1} space="$1">
-                  <Text fontSize="$5" fontWeight="700" color="$orange12" numberOfLines={2}>
-                    {product.name}
-                  </Text>
-                  <Text fontSize="$2" color="$orange11">
-                    Code: {product.productCode}
-                  </Text>
-                  {product.generic ? (
-                    <Text fontSize="$2" color="$orange11" numberOfLines={1}>
-                      Generic: {product.generic}
-                    </Text>
-                  ) : null}
-                </YStack>
-                <YStack alignItems="flex-end" space="$1">
-                  <StockBadge stock={totalStock} warningQuantity={warningQuantity} />
-                  {!product.isActive && (
-                    <Badge backgroundColor="$red9">
-                      <Text color="white" fontSize="$1" fontWeight="600">Inactive</Text>
-                    </Badge>
-                  )}
-                  <BatchExpiryIndicator batches={product.stockSummary?.batchStockDetails} />
-                </YStack>
-              </XStack>
-
-              {/* Category Info */}
-              <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$1">
-                <Text fontSize="$2" color="$orange10" fontWeight="600">
-                  {product.category.name}
-                  {product.subCategory ? ` › ${product.subCategory.name}` : ''}
-                </Text>
-                {subProductCount > 0 && (
-                  <YStack
-                    backgroundColor="$orange2"
-                    borderColor="$orange6"
-                    borderWidth={1}
-                    borderRadius="$2"
-                    paddingHorizontal="$2"
-                    paddingVertical={2}
-                  >
-                    <Text fontSize="$1" fontWeight="600" color="$orange10">
-                      {subProductCount} sub-product{subProductCount > 1 ? 's' : ''}
-                    </Text>
-                  </YStack>
-                )}
-              </XStack>
+        {/* Product Info */}
+        <YStack flex={1} gap={4}>
+          <XStack justifyContent="space-between" alignItems="flex-start" gap={8}>
+            <Text flex={1} fontSize={15} fontWeight="700" color={C.text} numberOfLines={2}>
+              {product.name}
+            </Text>
+            <YStack alignItems="flex-end" gap={4}>
+              <StockBadge stock={totalStock} warningQuantity={warningQuantity} />
+              {!product.isActive ? <Pill tone="red">Inactive</Pill> : null}
+              <BatchExpiryIndicator batches={product.stockSummary?.batchStockDetails} />
             </YStack>
           </XStack>
+          <Text fontSize={12} color={C.muted}>
+            Code: {product.productCode}
+          </Text>
+          {product.generic ? (
+            <Text fontSize={12} color={C.muted} numberOfLines={1}>
+              Generic: {product.generic}
+            </Text>
+          ) : null}
 
-          {/* Stock Information */}
-          <YStack space="$2">
-            <XStack justifyContent="space-between">
-              <Text fontSize="$3" fontWeight="600" color="$orange11">
-                Total Stock:
-              </Text>
-              <Text fontSize="$3" fontWeight="700" color="$orange12">
-                {formatQty(totalStock)} units
+          {/* Category Info */}
+          <XStack alignItems="center" flexWrap="wrap" gap={6}>
+            <XStack alignItems="center" gap={4} flexShrink={1}>
+              <Ionicons name="pricetag-outline" size={12} color={C.muted} />
+              <Text fontSize={12} color={C.label} numberOfLines={1} flexShrink={1}>
+                {product.category.name}
+                {product.subCategory ? ` › ${product.subCategory.name}` : ''}
               </Text>
             </XStack>
-
-            {selectedShopId ? (
-              <XStack justifyContent="space-between">
-                <Text fontSize="$2" color="$orange11">
-                  This Shop:
-                </Text>
-                <Text fontSize="$2" fontWeight="600" color="$orange12">
-                  {formatQty(shopStock)} units
-                </Text>
-              </XStack>
+            {subProductCount > 0 ? (
+              <Pill tone="neutral">
+                {`${subProductCount} sub-product${subProductCount > 1 ? 's' : ''}`}
+              </Pill>
             ) : null}
-
-            {/* Stock Progress Bar */}
-            <YStack space="$1">
-              <XStack justifyContent="space-between">
-                <Text fontSize="$1" color="$orange11">Stock Level</Text>
-                <Text fontSize="$1" color="$orange11">
-                  {warningQuantity > 0 ? `Alert at ${formatQty(warningQuantity)}` : `${formatQty(totalStock)} units`}
-                </Text>
-              </XStack>
-              <Progress
-                value={Math.min((totalStock / Math.max(warningQuantity * 3, 100)) * 100, 100)}
-                size="$1"
-                backgroundColor="$orange4"
-              >
-                <Progress.Indicator
-                  backgroundColor={
-                    totalStock <= 0 ? '$red9' :
-                    isLowStock(totalStock, warningQuantity) ? '$orange9' : '$green9'
-                  }
-                />
-              </Progress>
-            </YStack>
-          </YStack>
-
-          {/* Price and Actions */}
-          <XStack justifyContent="space-between" alignItems="center" space="$2" paddingTop="$2" borderTopWidth={1} borderTopColor="$orange4">
-            <PriceDisplay
-              price={product.sellPrice}
-              additionalPrices={product.AdditionalPrice}
-              shopId={selectedShopId}
-            />
-            <Button
-              size="$2"
-              backgroundColor="$orange1"
-              borderColor="$orange9"
-              borderWidth={1}
-              borderRadius="$3"
-              onPress={() => onPress(product)}
-            >
-              <Text color="$orange9" fontWeight="700" fontSize="$2">
-                Details
-              </Text>
-            </Button>
           </XStack>
         </YStack>
-      </Card.Header>
-    </Card>
+      </XStack>
+
+      {/* Stock Information */}
+      <YStack gap={6}>
+        <XStack justifyContent="space-between">
+          <Text fontSize={14} color={C.label}>
+            Total Stock
+          </Text>
+          <Text fontSize={14} fontWeight="700" color={C.text}>
+            {formatQty(totalStock)} units
+          </Text>
+        </XStack>
+
+        {selectedShopId ? (
+          <XStack justifyContent="space-between">
+            <Text fontSize={13} color={C.label}>
+              This Shop
+            </Text>
+            <Text fontSize={13} fontWeight="600" color={C.text}>
+              {formatQty(shopStock)} units
+            </Text>
+          </XStack>
+        ) : null}
+
+        {/* Stock Progress Bar */}
+        <YStack gap={4}>
+          <XStack justifyContent="space-between">
+            <Text fontSize={12} color={C.muted}>Stock Level</Text>
+            <Text fontSize={12} color={C.muted}>
+              {warningQuantity > 0 ? `Alert at ${formatQty(warningQuantity)}` : `${formatQty(totalStock)} units`}
+            </Text>
+          </XStack>
+          <Progress
+            value={Math.min((totalStock / Math.max(warningQuantity * 3, 100)) * 100, 100)}
+            size="$1"
+            backgroundColor="#F3F4F6"
+          >
+            <Progress.Indicator
+              backgroundColor={
+                totalStock <= 0 ? '#DC2626' :
+                isLowStock(totalStock, warningQuantity) ? '#F59E0B' : '#16A34A'
+              }
+            />
+          </Progress>
+        </YStack>
+      </YStack>
+
+      {/* Price and Actions */}
+      <XStack justifyContent="space-between" alignItems="center" gap={8} paddingTop={12} borderTopWidth={1} borderTopColor={C.border}>
+        <PriceDisplay
+          price={product.sellPrice}
+          additionalPrices={product.AdditionalPrice}
+          shopId={selectedShopId}
+        />
+        <Button
+          size="$3"
+          backgroundColor="white"
+          borderColor={C.border}
+          borderWidth={1}
+          borderRadius={10}
+          onPress={() => onPress(product)}
+          pressStyle={{ backgroundColor: C.subtle, borderColor: C.border }}
+          iconAfter={<Ionicons name="chevron-forward" size={16} color={C.muted} />}
+        >
+          <Text color={C.text} fontWeight="600" fontSize={13}>
+            Details
+          </Text>
+        </Button>
+      </XStack>
+    </YStack>
   );
 };
 
@@ -594,84 +674,77 @@ const FilterModal = ({
           flex={1}
           justifyContent="center"
           alignItems="center"
-          backgroundColor="rgba(0,0,0,0.5)"
+          backgroundColor="rgba(0,0,0,0.4)"
           padding="$4"
         >
           <TouchableWithoutFeedback>
             <YStack
-              backgroundColor="$orange1"
-              borderRadius="$4"
-              padding="$4"
+              backgroundColor="white"
+              borderRadius={16}
+              padding={16}
               width="100%"
               maxWidth={400}
               borderWidth={1}
-              borderColor="$orange4"
+              borderColor={C.border}
               maxHeight="90%"
             >
               <ScrollView showsVerticalScrollIndicator={false}>
-                <YStack space="$4">
-                  <H4 textAlign="center" color="$orange12">
-                    Filter Products
-                  </H4>
+                <YStack gap={16}>
+                  <ModalTitle title="Filter Products" onClose={onClose} />
 
                   {/* Search */}
-                  <Fieldset>
-                    <Label htmlFor="search" fontSize="$3" fontWeight="600" color="$orange12">
-                      Search
-                    </Label>
+                  <Fieldset gap={6}>
+                    <LabelText>Search</LabelText>
                     <Input
                       id="search"
                       value={localFilters.searchTerm || ''}
                       onChangeText={(text) => updateLocalFilter('searchTerm', text)}
                       placeholder="Search products..."
-                      borderColor="$orange5"
-                      backgroundColor="$orange1"
+                      {...inputStyle}
                     />
                   </Fieldset>
 
                   {/* Stock Range */}
-                  <YStack space="$3">
-                    <Text fontSize="$4" fontWeight="600" color="$orange11">
+                  <YStack gap={12}>
+                    <Text fontSize={13} fontWeight="600" color={C.label}>
                       Stock Range
                     </Text>
 
-                    <Fieldset>
-                      <Label htmlFor="minStock" fontSize="$3" fontWeight="600" color="$orange12">
-                        Minimum Stock
-                      </Label>
-                      <Input
-                        id="minStock"
-                        value={localFilters.minStock?.toString() || ''}
-                        onChangeText={(text) => updateLocalFilter('minStock', text ? parseInt(text) : undefined)}
-                        placeholder="0"
-                        keyboardType="numeric"
-                        borderColor="$orange5"
-                        backgroundColor="$orange1"
-                      />
-                    </Fieldset>
+                    <XStack gap={12}>
+                      <Fieldset gap={6} flex={1}>
+                        <Label htmlFor="minStock" fontSize={13} fontWeight="500" color={C.muted} lineHeight={18}>
+                          Minimum
+                        </Label>
+                        <Input
+                          id="minStock"
+                          value={localFilters.minStock?.toString() || ''}
+                          onChangeText={(text) => updateLocalFilter('minStock', text ? parseInt(text) : undefined)}
+                          placeholder="0"
+                          keyboardType="numeric"
+                          {...inputStyle}
+                        />
+                      </Fieldset>
 
-                    <Fieldset>
-                      <Label htmlFor="maxStock" fontSize="$3" fontWeight="600" color="$orange12">
-                        Maximum Stock
-                      </Label>
-                      <Input
-                        id="maxStock"
-                        value={localFilters.maxStock?.toString() || ''}
-                        onChangeText={(text) => updateLocalFilter('maxStock', text ? parseInt(text) : undefined)}
-                        placeholder="100"
-                        keyboardType="numeric"
-                        borderColor="$orange5"
-                        backgroundColor="$orange1"
-                      />
-                    </Fieldset>
+                      <Fieldset gap={6} flex={1}>
+                        <Label htmlFor="maxStock" fontSize={13} fontWeight="500" color={C.muted} lineHeight={18}>
+                          Maximum
+                        </Label>
+                        <Input
+                          id="maxStock"
+                          value={localFilters.maxStock?.toString() || ''}
+                          onChangeText={(text) => updateLocalFilter('maxStock', text ? parseInt(text) : undefined)}
+                          placeholder="100"
+                          keyboardType="numeric"
+                          {...inputStyle}
+                        />
+                      </Fieldset>
+                    </XStack>
                   </YStack>
 
                   {/* Shop Filter */}
-                  {shops.length > 0 && (
-                    <Fieldset>
-                      <Label htmlFor="shopFilter" fontSize="$3" fontWeight="600" color="$orange12">
-                        Filter by Shop Stock
-                      </Label>
+                  {shops.length > 0 ? (
+                    <Fieldset gap={6}>
+                      <LabelText>Filter by Shop Stock</LabelText>
                       <CustomSelect
                         value={localFilters.shopId || ''}
                         onValueChange={(value) => updateLocalFilter('shopId', value)}
@@ -679,13 +752,11 @@ const FilterModal = ({
                         placeholder="All shops"
                       />
                     </Fieldset>
-                  )}
+                  ) : null}
 
                   {/* Status Filter */}
-                  <Fieldset>
-                    <Label htmlFor="statusFilter" fontSize="$3" fontWeight="600" color="$orange12">
-                      Status
-                    </Label>
+                  <Fieldset gap={6}>
+                    <LabelText>Status</LabelText>
                     <CustomSelect
                       value={localFilters.isActive || ''}
                       onValueChange={(value) => updateLocalFilter('isActive', value)}
@@ -699,71 +770,38 @@ const FilterModal = ({
                     localFilters.minStock !== undefined ||
                     localFilters.maxStock !== undefined ||
                     localFilters.shopId ||
-                    localFilters.isActive) && (
-                    <Card backgroundColor="$orange2" padding="$3" borderRadius="$3">
-                      <Text fontSize="$3" fontWeight="600" color="$orange11">
-                        Active Filters:
+                    localFilters.isActive) ? (
+                    <YStack gap={6} borderWidth={1} borderColor={C.border} borderRadius={12} padding={12}>
+                      <Text fontSize={12} fontWeight="600" color={C.muted}>
+                        Active filters
                       </Text>
-                      <YStack space="$1" marginTop="$2">
-                        {localFilters.searchTerm && (
-                          <XStack>
-                            <Text fontSize="$2" color="$orange10">Search: </Text>
-                            <Text fontSize="$2" fontWeight="600" color="$orange12">{localFilters.searchTerm}</Text>
-                          </XStack>
-                        )}
-                        {localFilters.minStock !== undefined && (
-                          <XStack>
-                            <Text fontSize="$2" color="$orange10">Min Stock: </Text>
-                            <Text fontSize="$2" fontWeight="600" color="$orange12">{localFilters.minStock}</Text>
-                          </XStack>
-                        )}
-                        {localFilters.maxStock !== undefined && (
-                          <XStack>
-                            <Text fontSize="$2" color="$orange10">Max Stock: </Text>
-                            <Text fontSize="$2" fontWeight="600" color="$orange12">{localFilters.maxStock}</Text>
-                          </XStack>
-                        )}
-                        {localFilters.shopId && (
-                          <XStack>
-                            <Text fontSize="$2" color="$orange10">Shop: </Text>
-                            <Text fontSize="$2" fontWeight="600" color="$orange12">
-                              {shops.find(s => s.id === localFilters.shopId)?.name}
-                            </Text>
-                          </XStack>
-                        )}
-                        {localFilters.isActive && (
-                          <XStack>
-                            <Text fontSize="$2" color="$orange10">Status: </Text>
-                            <Text fontSize="$2" fontWeight="600" color="$orange12">
-                              {localFilters.isActive === 'active' ? 'Active' : 'Inactive'}
-                            </Text>
-                          </XStack>
-                        )}
-                      </YStack>
-                    </Card>
-                  )}
+                      <XStack flexWrap="wrap" gap={6}>
+                        {localFilters.searchTerm ? (
+                          <Pill tone="accent">{`Search: ${localFilters.searchTerm}`}</Pill>
+                        ) : null}
+                        {localFilters.minStock !== undefined ? (
+                          <Pill tone="accent">{`Min stock: ${localFilters.minStock}`}</Pill>
+                        ) : null}
+                        {localFilters.maxStock !== undefined ? (
+                          <Pill tone="accent">{`Max stock: ${localFilters.maxStock}`}</Pill>
+                        ) : null}
+                        {localFilters.shopId ? (
+                          <Pill tone="accent">
+                            {`Shop: ${shops.find(s => s.id === localFilters.shopId)?.name || ''}`}
+                          </Pill>
+                        ) : null}
+                        {localFilters.isActive ? (
+                          <Pill tone="accent">
+                            {`Status: ${localFilters.isActive === 'active' ? 'Active' : 'Inactive'}`}
+                          </Pill>
+                        ) : null}
+                      </XStack>
+                    </YStack>
+                  ) : null}
 
-                  <XStack space="$3" marginTop="$2">
-                    <Button
-                      flex={1}
-                      backgroundColor="$orange1"
-                      borderColor="$orange9"
-                      borderWidth={1}
-                      borderRadius="$4"
-                      onPress={handleClear}
-                    >
-                      <Text color="$orange9" fontWeight="600">Clear All</Text>
-                    </Button>
-                    <Button
-                      flex={1}
-                      backgroundColor="$orange9"
-                      borderColor="$orange9"
-                      borderWidth={1}
-                      borderRadius="$4"
-                      onPress={handleApply}
-                    >
-                      <Text color="white" fontWeight="600">Apply Filters</Text>
-                    </Button>
+                  <XStack gap={12}>
+                    <SecondaryButton flex={1} onPress={handleClear}>Clear All</SecondaryButton>
+                    <PrimaryButton flex={1} onPress={handleApply}>Apply Filters</PrimaryButton>
                   </XStack>
                 </YStack>
               </ScrollView>
@@ -822,28 +860,24 @@ const SortModal = ({
         flex={1}
         justifyContent="center"
         alignItems="center"
-        backgroundColor="rgba(0,0,0,0.5)"
+        backgroundColor="rgba(0,0,0,0.4)"
         padding="$4"
       >
         <YStack
-          backgroundColor="$orange1"
-          borderRadius="$4"
-          padding="$4"
+          backgroundColor="white"
+          borderRadius={16}
+          padding={16}
           width="100%"
           maxWidth={400}
           borderWidth={1}
-          borderColor="$orange4"
+          borderColor={C.border}
         >
-          <YStack space="$4">
-            <H4 textAlign="center" color="$orange12">
-              Sort Products
-            </H4>
+          <YStack gap={16}>
+            <ModalTitle title="Sort Products" onClose={onClose} />
 
             {/* Sort Field */}
-            <Fieldset>
-              <Label htmlFor="sortField" fontSize="$3" fontWeight="600" color="$orange12">
-                Sort By
-              </Label>
+            <Fieldset gap={6}>
+              <LabelText>Sort By</LabelText>
               <CustomSelect
                 value={localSort.field}
                 onValueChange={(value) => setLocalSort((prev: any) => ({ ...prev, field: value }))}
@@ -853,10 +887,8 @@ const SortModal = ({
             </Fieldset>
 
             {/* Sort Direction */}
-            <Fieldset>
-              <Label htmlFor="sortDirection" fontSize="$3" fontWeight="600" color="$orange12">
-                Direction
-              </Label>
+            <Fieldset gap={6}>
+              <LabelText>Direction</LabelText>
               <CustomSelect
                 value={localSort.direction}
                 onValueChange={(value) => setLocalSort((prev: any) => ({ ...prev, direction: value }))}
@@ -865,27 +897,9 @@ const SortModal = ({
               />
             </Fieldset>
 
-            <XStack space="$3" marginTop="$2">
-              <Button
-                flex={1}
-                backgroundColor="$orange1"
-                borderColor="$orange9"
-                borderWidth={1}
-                borderRadius="$4"
-                onPress={onClose}
-              >
-                <Text color="$orange9" fontWeight="600">Cancel</Text>
-              </Button>
-              <Button
-                flex={1}
-                backgroundColor="$orange9"
-                borderColor="$orange9"
-                borderWidth={1}
-                borderRadius="$4"
-                onPress={handleApply}
-              >
-                <Text color="white" fontWeight="600">Apply Sort</Text>
-              </Button>
+            <XStack gap={12}>
+              <SecondaryButton flex={1} onPress={onClose}>Cancel</SecondaryButton>
+              <PrimaryButton flex={1} onPress={handleApply}>Apply Sort</PrimaryButton>
             </XStack>
           </YStack>
         </YStack>
@@ -893,6 +907,13 @@ const SortModal = ({
     </Modal>
   );
 };
+
+const InfoRow = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <XStack justifyContent="space-between" alignItems="center" gap={12}>
+    <Text color={C.label} fontSize={14}>{label}</Text>
+    {children}
+  </XStack>
+);
 
 // One row of the Sub-products section in the detail sheet
 const SubProductRow = ({ subProduct, product }: { subProduct: ProductSubProduct; product: Product }) => {
@@ -902,24 +923,24 @@ const SubProductRow = ({ subProduct, product }: { subProduct: ProductSubProduct;
 
   return (
     <YStack
-      backgroundColor="$orange1"
-      borderColor="$orange4"
+      backgroundColor="white"
+      borderColor={C.border}
       borderWidth={1}
-      borderRadius="$3"
-      padding="$3"
-      space="$2"
+      borderRadius={12}
+      padding={12}
+      gap={8}
     >
-      <XStack space="$2" alignItems="flex-start">
+      <XStack gap={8} alignItems="flex-start">
         {subImageUrl ? (
-          <YStack width={44} height={44} borderRadius="$2" overflow="hidden" backgroundColor="$orange2">
+          <YStack width={44} height={44} borderRadius={8} overflow="hidden" backgroundColor={C.subtle}>
             <Image source={{ uri: subImageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           </YStack>
         ) : null}
-        <YStack flex={1} space="$1">
-          <Text fontWeight="700" color="$orange12" numberOfLines={2}>
+        <YStack flex={1} gap={2}>
+          <Text fontWeight="700" color={C.text} numberOfLines={2}>
             {subProduct.name}
           </Text>
-          <Text fontSize="$1" color="$orange11">
+          <Text fontSize={12} color={C.muted}>
             Code: {subProduct.subProductCode}
           </Text>
         </YStack>
@@ -927,38 +948,44 @@ const SubProductRow = ({ subProduct, product }: { subProduct: ProductSubProduct;
       </XStack>
 
       <XStack justifyContent="space-between" alignItems="center">
-        <Text fontSize="$2" color="$orange11">Price:</Text>
-        <Text fontSize="$3" fontWeight="700" color="$orange9">
+        <Text fontSize={13} color={C.label}>Price</Text>
+        <Text fontSize={14} fontWeight="700" color={C.text}>
           {formatMoney(usesProductPrice ? product.sellPrice : subProduct.sellPrice)}
-          {usesProductPrice ? <Text fontSize="$1" fontWeight="400" color="$orange11"> (product price)</Text> : null}
+          {usesProductPrice ? <Text fontSize={12} fontWeight="400" color={C.muted}> (product price)</Text> : null}
         </Text>
       </XStack>
 
       <XStack justifyContent="space-between">
-        <Text fontSize="$2" color="$orange11">Stock:</Text>
-        <Text fontSize="$2" fontWeight="600" color="$orange12">
+        <Text fontSize={13} color={C.label}>Stock</Text>
+        <Text fontSize={13} fontWeight="600" color={C.text}>
           {formatQty(subProduct.totalStock || 0)} units
-          <Text fontSize="$1" fontWeight="400" color="$orange11">
+          <Text fontSize={12} fontWeight="400" color={C.muted}>
             {`  (shop ${formatQty(subProduct.totalShopStock || 0)} · store ${formatQty(subProduct.totalStoreStock || 0)})`}
           </Text>
         </Text>
       </XStack>
 
-      {ownPrices.length > 0 && (
-        <YStack space="$1">
-          <Text fontSize="$1" color="$orange11">Other prices:</Text>
+      {ownPrices.length > 0 ? (
+        <YStack gap={4}>
+          <Text fontSize={12} color={C.muted}>Other prices</Text>
           <AdditionalPriceChips prices={ownPrices} />
         </YStack>
-      )}
+      ) : null}
     </YStack>
   );
 };
 
 // Section card used inside the detail sheet
 const DetailSection = ({ children }: { children: React.ReactNode }) => (
-  <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$4" borderRadius="$4">
+  <YStack backgroundColor="white" borderColor={C.border} borderWidth={1} padding={14} borderRadius={12}>
     {children}
-  </Card>
+  </YStack>
+);
+
+const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+  <Text fontWeight="700" color={C.text} fontSize={16}>
+    {children}
+  </Text>
 );
 
 const LocationStockList = ({ title, rows }: {
@@ -967,15 +994,23 @@ const LocationStockList = ({ title, rows }: {
 }) => {
   if (rows.length === 0) return null;
   return (
-    <YStack space="$2">
-      <Text fontWeight="600" color="$orange11">{title}</Text>
+    <YStack gap={8}>
+      <Text fontWeight="600" fontSize={13} color={C.label}>{title}</Text>
       {rows.map(row => (
-        <XStack key={row.key} justifyContent="space-between" alignItems="center">
+        <XStack
+          key={row.key}
+          justifyContent="space-between"
+          alignItems="center"
+          backgroundColor={C.subtle}
+          borderRadius={8}
+          paddingHorizontal={10}
+          paddingVertical={8}
+        >
           <YStack flex={1}>
-            <Text color="$orange12" fontSize="$2">{row.name}</Text>
-            <Text color="$orange11" fontSize="$1">{row.branch}</Text>
+            <Text color={C.text} fontSize={14}>{row.name}</Text>
+            <Text color={C.muted} fontSize={12}>{row.branch}</Text>
           </YStack>
-          <Text color="$orange12" fontSize="$2" fontWeight="600">
+          <Text color={C.text} fontSize={14} fontWeight="600">
             {formatQty(row.qty)} units
           </Text>
         </XStack>
@@ -1015,197 +1050,185 @@ const ProductDetailModal = ({
     >
       <YStack
         flex={1}
-        backgroundColor="rgba(0,0,0,0.5)"
+        backgroundColor="rgba(0,0,0,0.4)"
         justifyContent="flex-end"
       >
         <YStack
-          backgroundColor="$orange1"
-          borderTopLeftRadius="$6"
-          borderTopRightRadius="$6"
-          padding="$4"
+          backgroundColor="white"
+          borderTopLeftRadius={20}
+          borderTopRightRadius={20}
+          padding={16}
           maxHeight="85%"
-          borderWidth={1}
-          borderColor="$orange4"
         >
           <ScrollView showsVerticalScrollIndicator={false}>
-            <YStack space="$4">
+            <YStack gap={16}>
               {/* Header */}
-              <XStack justifyContent="space-between" alignItems="center" space="$2">
-                <YStack flex={1}>
-                  <H4 color="$orange12" fontWeight="800" numberOfLines={2}>
-                    {product.name}
-                  </H4>
-                  <YStack width={36} height={3} borderRadius={2} backgroundColor="$orange9" marginTop="$1" />
-                </YStack>
+              <XStack justifyContent="space-between" alignItems="center" gap={8}>
+                <Text flex={1} color={C.text} fontSize={20} fontWeight="700" numberOfLines={2}>
+                  {product.name}
+                </Text>
                 <Button
-                  size="$2"
+                  size="$3"
                   circular
-                  backgroundColor="$orange2"
-                  borderColor="$orange4"
+                  backgroundColor="white"
+                  borderColor={C.border}
                   borderWidth={1}
                   onPress={onClose}
-                >
-                  <Text color="$orange12">✕</Text>
-                </Button>
+                  pressStyle={{ backgroundColor: C.subtle, borderColor: C.border }}
+                  icon={<Ionicons name="close" size={18} color={C.text} />}
+                />
               </XStack>
 
               {/* Basic Info */}
               <DetailSection>
-                <YStack space="$3">
-                  <XStack justifyContent="space-between">
-                    <Text fontWeight="600" color="$orange11">Product Code:</Text>
-                    <Text color="$orange12">{product.productCode}</Text>
-                  </XStack>
-                  <XStack justifyContent="space-between">
-                    <Text fontWeight="600" color="$orange11">Category:</Text>
-                    <Text color="$orange12">
+                <YStack gap={10}>
+                  <InfoRow label="Product Code">
+                    <Text color={C.text} fontWeight="600">{product.productCode}</Text>
+                  </InfoRow>
+                  <InfoRow label="Category">
+                    <Text color={C.text} flexShrink={1} textAlign="right">
                       {product.category.name}
                       {product.subCategory ? ` › ${product.subCategory.name}` : ''}
                     </Text>
-                  </XStack>
+                  </InfoRow>
                   {product.generic ? (
-                    <XStack justifyContent="space-between">
-                      <Text fontWeight="600" color="$orange11">Generic:</Text>
-                      <Text color="$orange12">{product.generic}</Text>
-                    </XStack>
+                    <InfoRow label="Generic">
+                      <Text color={C.text} flexShrink={1} textAlign="right">{product.generic}</Text>
+                    </InfoRow>
                   ) : null}
-                  <XStack justifyContent="space-between">
-                    <Text fontWeight="600" color="$orange11">Status:</Text>
-                    <XStack alignItems="center" space="$2">
-                      <Text color={product.isActive ? '$green10' : '$red10'} fontWeight="600">
+                  <InfoRow label="Status">
+                    <XStack alignItems="center" gap={8}>
+                      <Pill tone={product.isActive ? 'green' : 'red'}>
                         {product.isActive ? 'Active' : 'Inactive'}
-                      </Text>
+                      </Pill>
                       <Switch
                         size="$2"
                         checked={product.isActive}
                         onCheckedChange={() => onToggleActive(product.id)}
-                        backgroundColor={product.isActive ? '$green8' : '$red8'}
+                        backgroundColor={product.isActive ? C.accent : '#D1D5DB'}
+                        borderWidth={0}
                       >
-                        <Switch.Thumb />
+                        <Switch.Thumb backgroundColor="white" />
                       </Switch>
                     </XStack>
-                  </XStack>
-                  <XStack justifyContent="space-between">
-                    <Text fontWeight="600" color="$orange11">Sell Price:</Text>
-                    <Text color="$orange9" fontWeight="800">
+                  </InfoRow>
+                  <InfoRow label="Sell Price">
+                    <Text color={C.accent} fontWeight="800" fontSize={16}>
                       {formatMoney(product.sellPrice)}
                     </Text>
-                  </XStack>
-                  {productPrices.length > 0 && (
-                    <YStack space="$1">
-                      <Text fontWeight="600" color="$orange11">Other prices:</Text>
+                  </InfoRow>
+                  {productPrices.length > 0 ? (
+                    <YStack gap={4}>
+                      <Text color={C.label} fontSize={14}>Other prices</Text>
                       <AdditionalPriceChips prices={productPrices} />
                     </YStack>
-                  )}
-                  {warningQuantity > 0 && (
-                    <XStack justifyContent="space-between">
-                      <Text fontWeight="600" color="$orange11">Low-stock alert at:</Text>
-                      <Text color="$orange12">{formatQty(warningQuantity)} units</Text>
-                    </XStack>
-                  )}
+                  ) : null}
+                  {warningQuantity > 0 ? (
+                    <InfoRow label="Low-stock alert at">
+                      <Text color={C.text}>{formatQty(warningQuantity)} units</Text>
+                    </InfoRow>
+                  ) : null}
                 </YStack>
               </DetailSection>
 
               {/* Stock Summary */}
               <DetailSection>
-                <YStack space="$3">
-                  <Text fontWeight="700" color="$orange12" fontSize="$5">
-                    Stock Summary
-                  </Text>
+                <YStack gap={12}>
+                  <SectionTitle>Stock Summary</SectionTitle>
 
                   <XStack justifyContent="space-between" alignItems="center">
-                    <Text fontWeight="600" color="$orange11">
-                      Total Stock: <Text color="$orange12" fontWeight="700">{formatQty(totalStock)} units</Text>
+                    <Text color={C.label} fontSize={14}>
+                      Total Stock: <Text color={C.text} fontWeight="700">{formatQty(totalStock)} units</Text>
                     </Text>
                     <StockBadge stock={totalStock} warningQuantity={warningQuantity} />
                   </XStack>
 
                   {/* Shop Stocks */}
-                  <LocationStockList title="Shop Stocks:" rows={shopRows} />
+                  <LocationStockList title="Shop Stocks" rows={shopRows} />
 
                   {/* Store Stocks */}
-                  <LocationStockList title="Store Stocks:" rows={storeRows} />
+                  <LocationStockList title="Store Stocks" rows={storeRows} />
 
                   {/* Stock Totals */}
-                  <XStack justifyContent="space-between" paddingTop="$2" borderTopWidth={1} borderTopColor="$orange4">
-                    <YStack space="$1" flex={1}>
-                      <XStack justifyContent="space-between">
-                        <Text color="$orange11" fontSize="$2">Total Shop Stock:</Text>
-                        <Text color="$orange12" fontSize="$2" fontWeight="600">
-                          {formatQty(product.stockSummary?.totalShopStock || 0)} units
-                        </Text>
-                      </XStack>
-                      <XStack justifyContent="space-between">
-                        <Text color="$orange11" fontSize="$2">Total Store Stock:</Text>
-                        <Text color="$orange12" fontSize="$2" fontWeight="600">
-                          {formatQty(product.stockSummary?.totalStoreStock || 0)} units
-                        </Text>
-                      </XStack>
-                    </YStack>
-                  </XStack>
+                  <YStack gap={6} paddingTop={10} borderTopWidth={1} borderTopColor={C.border}>
+                    <XStack justifyContent="space-between">
+                      <Text color={C.label} fontSize={13}>Total Shop Stock</Text>
+                      <Text color={C.text} fontSize={13} fontWeight="600">
+                        {formatQty(product.stockSummary?.totalShopStock || 0)} units
+                      </Text>
+                    </XStack>
+                    <XStack justifyContent="space-between">
+                      <Text color={C.label} fontSize={13}>Total Store Stock</Text>
+                      <Text color={C.text} fontSize={13} fontWeight="600">
+                        {formatQty(product.stockSummary?.totalStoreStock || 0)} units
+                      </Text>
+                    </XStack>
+                  </YStack>
                 </YStack>
               </DetailSection>
 
               {/* Sub-products */}
-              {subProducts.length > 0 && (
+              {subProducts.length > 0 ? (
                 <DetailSection>
-                  <YStack space="$3">
-                    <Text fontWeight="700" color="$orange12" fontSize="$5">
-                      Sub-products ({subProducts.length})
-                    </Text>
+                  <YStack gap={10}>
+                    <SectionTitle>{`Sub-products (${subProducts.length})`}</SectionTitle>
                     {subProducts.map(subProduct => (
                       <SubProductRow key={subProduct.id} subProduct={subProduct} product={product} />
                     ))}
                   </YStack>
                 </DetailSection>
-              )}
+              ) : null}
 
               {/* Batch Details */}
-              {batchDetails.length > 0 && (
+              {batchDetails.length > 0 ? (
                 <DetailSection>
-                  <YStack space="$3">
-                    <Text fontWeight="700" color="$orange12" fontSize="$5">
-                      Batch Details ({batchDetails.length})
-                    </Text>
+                  <YStack gap={10}>
+                    <SectionTitle>{`Batch Details (${batchDetails.length})`}</SectionTitle>
                     {batchDetails.map((batch) => {
                       const batchSubProduct = batch.subProductId
                         ? subProducts.find(sp => sp.id === batch.subProductId)
                         : undefined;
                       return (
-                        <Card key={batch.batchId} backgroundColor="$orange2" padding="$3" borderRadius="$3">
-                          <YStack space="$2">
-                            <XStack justifyContent="space-between">
-                              <Text fontWeight="600" color="$orange12">
-                                Batch #{batch.batchNumber || batch.batchId?.slice(-6) || 'N/A'}
-                              </Text>
-                              <Text color="$orange11">
-                                {formatQty(batch.totalStock)} units
+                        <YStack
+                          key={batch.batchId}
+                          backgroundColor={C.subtle}
+                          borderWidth={1}
+                          borderColor={C.border}
+                          padding={10}
+                          borderRadius={10}
+                          gap={4}
+                        >
+                          <XStack justifyContent="space-between">
+                            <Text fontWeight="600" color={C.text}>
+                              Batch #{batch.batchNumber || batch.batchId?.slice(-6) || 'N/A'}
+                            </Text>
+                            <Text color={C.text} fontWeight="600">
+                              {formatQty(batch.totalStock)} units
+                            </Text>
+                          </XStack>
+                          {batchSubProduct ? (
+                            <Text color={C.muted} fontSize={12}>{batchSubProduct.name}</Text>
+                          ) : null}
+                          {batch.expiryDate ? (
+                            <XStack alignItems="center" gap={4}>
+                              <Ionicons name="calendar-outline" size={12} color={C.muted} />
+                              <Text color={C.muted} fontSize={12}>
+                                Expiry: {new Date(batch.expiryDate).toLocaleDateString()}
                               </Text>
                             </XStack>
-                            {batchSubProduct ? (
-                              <Text color="$orange11" fontSize="$1">{batchSubProduct.name}</Text>
-                            ) : null}
-                            {batch.expiryDate ? (
-                              <XStack justifyContent="space-between">
-                                <Text color="$orange11" fontSize="$1">Expiry:</Text>
-                                <Text color="$orange12" fontSize="$1" fontWeight="600">
-                                  {new Date(batch.expiryDate).toLocaleDateString()}
-                                </Text>
-                              </XStack>
-                            ) : null}
-                          </YStack>
-                        </Card>
+                          ) : null}
+                        </YStack>
                       );
                     })}
                   </YStack>
                 </DetailSection>
-              )}
+              ) : null}
 
               {product.description ? (
                 <DetailSection>
-                  <YStack space="$2">
-                    <Text fontWeight="600" color="$orange11">Description:</Text>
-                    <Text color="$orange12">{product.description}</Text>
+                  <YStack gap={6}>
+                    <Text fontWeight="600" color={C.label}>Description</Text>
+                    <Text color={C.text}>{product.description}</Text>
                   </YStack>
                 </DetailSection>
               ) : null}
@@ -1447,213 +1470,220 @@ export default function ProductsScreen() {
 
   if (loading && !refreshing && allProducts.length === 0) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1">
-        <Spinner size="large" color="$orange9" />
-        <Text marginTop="$4" color="$orange11" fontSize="$5" fontWeight="600">
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="white">
+        <Spinner size="large" color={C.accent} />
+        <Text marginTop={16} color={C.muted} fontSize={15}>
           Loading products...
         </Text>
       </YStack>
     );
   }
 
+  const sortFieldLabels: Record<string, string> = {
+    name: 'Product name',
+    productCode: 'Product code',
+    totalStock: 'Total stock',
+    price: 'Price',
+    createdAt: 'Date created',
+  };
+
   return (
-    <YStack flex={1} backgroundColor="$orange1">
+    <YStack flex={1} backgroundColor="white">
       <ScrollView
         flex={1}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[C.accent]} tintColor={C.accent} />
         }
       >
-        <YStack space="$4" padding="$4">
-          {/* Header with Stats */}
-          <Card
-            bordered
-            borderRadius="$5"
-            backgroundColor="$orange1"
-            borderColor="$orange4"
-            borderWidth={1}
-          >
-            <Card.Header padded>
-              <YStack space="$3" alignItems="center">
-                <YStack alignItems="center" space="$1">
-                  <H3 fontWeight="800" color="$orange12">
-                    Products Inventory
-                  </H3>
-                  <YStack width={40} height={3} borderRadius={2} backgroundColor="$orange9" />
-                </YStack>
+        {/* Screen header */}
+        <YStack
+          paddingHorizontal={16}
+          paddingTop={16}
+          paddingBottom={12}
+          borderBottomWidth={1}
+          borderBottomColor={C.border}
+          backgroundColor="white"
+          gap={2}
+        >
+          <Text fontSize={24} fontWeight="700" color={C.text}>
+            Products
+          </Text>
+          <Text fontSize={13} color={C.muted}>
+            Inventory, stock levels and prices
+          </Text>
+        </YStack>
 
-                {filteredAndSortedProducts.length === 0 ? (
-                  <YStack alignItems="center" space="$3" paddingVertical="$4">
-                    <Text fontSize="$6" color="$orange9">📦</Text>
-                    <Text fontSize="$5" fontWeight="600" color="$orange11" textAlign="center">
-                      {allProducts.length === 0 ? 'No products available' : 'No products match your filters'}
-                    </Text>
-                    <Text fontSize="$3" color="$orange9" textAlign="center">
-                      {hasActiveFilters ? (
-                        <Button
-                          onPress={handleResetAllFilters}
-                          backgroundColor="transparent"
-                          padding={0}
-                          margin={0}
-                        >
-                          <Text
-                            color="$orange11"
-                            fontWeight="600"
-                            textDecorationLine="underline"
-                          >
-                            Try adjusting your filters
-                          </Text>
-                        </Button>
-                      ) : (
-                        allProducts.length === 0 ? 'Add products to get started' : 'Your products will appear here'
-                      )}
-                    </Text>
-                  </YStack>
+        <YStack gap={12} padding={16}>
+          {/* Summary */}
+          <YStack
+            backgroundColor="white"
+            borderWidth={1}
+            borderColor={C.border}
+            borderRadius={14}
+            padding={16}
+            {...softShadow}
+          >
+            {filteredAndSortedProducts.length === 0 ? (
+              <YStack alignItems="center" gap={8} paddingVertical={16}>
+                <YStack
+                  width={56}
+                  height={56}
+                  borderRadius={999}
+                  backgroundColor={C.accentTint}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Ionicons name="cube-outline" size={26} color={C.accent} />
+                </YStack>
+                <Text fontSize={16} fontWeight="700" color={C.text} textAlign="center">
+                  {allProducts.length === 0 ? 'No products available' : 'No products match your filters'}
+                </Text>
+                {hasActiveFilters ? (
+                  <Text
+                    onPress={handleResetAllFilters}
+                    color={C.accent}
+                    fontWeight="600"
+                    fontSize={14}
+                    textAlign="center"
+                  >
+                    Try adjusting your filters
+                  </Text>
                 ) : (
-                  <YStack space="$3" width="100%">
-                    <XStack justifyContent="space-between" width="100%">
-                      <Text fontSize="$4" fontWeight="600" color="$orange11">
-                        Showing:
-                      </Text>
-                      <Text fontSize="$4" fontWeight="700" color="$orange12">
-                        {totalCount} of {allProducts.length} products
-                      </Text>
-                    </XStack>
-                  </YStack>
+                  <Text fontSize={14} color={C.muted} textAlign="center">
+                    {allProducts.length === 0 ? 'Add products to get started' : 'Your products will appear here'}
+                  </Text>
                 )}
               </YStack>
-            </Card.Header>
-          </Card>
+            ) : (
+              <XStack justifyContent="space-between" alignItems="center" width="100%">
+                <XStack alignItems="center" gap={8}>
+                  <Ionicons name="cube-outline" size={18} color={C.accent} />
+                  <Text fontSize={14} color={C.label}>
+                    Showing
+                  </Text>
+                </XStack>
+                <Text fontSize={14} color={C.muted}>
+                  <Text fontSize={20} fontWeight="800" color={C.text}>{totalCount}</Text>
+                  {` of ${allProducts.length} products`}
+                </Text>
+              </XStack>
+            )}
+          </YStack>
 
           {/* Filters & Search */}
-          {allProducts.length > 0 && (
-            <Card
-              bordered
-              borderRadius="$5"
-              backgroundColor="$orange1"
-              borderColor="$orange4"
+          {allProducts.length > 0 ? (
+            <YStack
+              backgroundColor="white"
               borderWidth={1}
+              borderColor={C.border}
+              borderRadius={14}
+              padding={16}
+              gap={12}
+              {...softShadow}
             >
-              <Card.Header padded>
-                <YStack space="$3">
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text fontSize="$5" fontWeight="700" color="$orange12">
-                      Filters & Search
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text fontSize={16} fontWeight="700" color={C.text}>
+                  Filters
+                </Text>
+                {hasActiveFilters ? (
+                  <XStack
+                    onPress={handleResetAllFilters}
+                    alignItems="center"
+                    gap={4}
+                    paddingHorizontal={10}
+                    paddingVertical={6}
+                    borderRadius={8}
+                    pressStyle={{ opacity: 0.7 }}
+                    cursor="pointer"
+                  >
+                    <Ionicons name="refresh-outline" size={16} color={C.accent} />
+                    <Text color={C.accent} fontWeight="600" fontSize={13}>
+                      Reset All
                     </Text>
-                    {hasActiveFilters && (
-                      <Button
-                        size="$2"
-                        backgroundColor="$red3"
-                        borderColor="$red6"
-                        borderWidth={1}
-                        borderRadius="$3"
-                        onPress={handleResetAllFilters}
-                      >
-                        <Text color="$red11" fontWeight="600" fontSize="$2">
-                          🔄 Reset All
-                        </Text>
-                      </Button>
-                    )}
                   </XStack>
+                ) : null}
+              </XStack>
 
-                  {/* Search */}
-                  <Fieldset>
-                    <Label htmlFor="search" fontSize="$3" fontWeight="600" color="$orange11">
-                      Search Products
-                    </Label>
-                    <Input
-                      id="search"
-                      placeholder="Search by name, code, generic, sub-product..."
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      borderColor="$orange5"
-                      backgroundColor="$orange1"
-                      borderRadius="$4"
-                      focusStyle={{ borderColor: '$orange9' }}
-                    />
-                  </Fieldset>
+              {/* Search */}
+              <Fieldset gap={6}>
+                <Label htmlFor="search" fontSize={13} fontWeight="600" color={C.label} lineHeight={18}>
+                  Search
+                </Label>
+                <XStack
+                  alignItems="center"
+                  borderWidth={1}
+                  borderColor={C.border}
+                  borderRadius={10}
+                  backgroundColor="white"
+                  paddingLeft={12}
+                >
+                  <Ionicons name="search-outline" size={18} color={C.muted} />
+                  <Input
+                    id="search"
+                    flex={1}
+                    placeholder="Name, code, generic, sub-product..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    borderWidth={0}
+                    backgroundColor="transparent"
+                    color={C.text}
+                    placeholderTextColor={C.placeholder}
+                    focusStyle={{ borderWidth: 0 }}
+                  />
+                </XStack>
+              </Fieldset>
 
-                  {/* Filter Actions */}
-                  <XStack space="$2">
-                    <Button
-                      flex={1}
-                      backgroundColor="$orange1"
-                      borderColor="$orange9"
-                      borderWidth={1}
-                      borderRadius="$3"
-                      onPress={() => setShowFilterModal(true)}
-                    >
-                      <Text color="$orange9" fontWeight="700">🔍 Filters</Text>
-                    </Button>
-                    <Button
-                      flex={1}
-                      backgroundColor="$orange1"
-                      borderColor="$orange9"
-                      borderWidth={1}
-                      borderRadius="$3"
-                      onPress={() => setShowSortModal(true)}
-                    >
-                      <Text color="$orange9" fontWeight="700">📊 Sort</Text>
-                    </Button>
+              {/* Filter Actions */}
+              <XStack gap={8}>
+                <SecondaryButton flex={1} icon="funnel-outline" onPress={() => setShowFilterModal(true)}>
+                  Filters
+                </SecondaryButton>
+                <SecondaryButton flex={1} icon="swap-vertical-outline" onPress={() => setShowSortModal(true)}>
+                  Sort
+                </SecondaryButton>
+              </XStack>
+
+              {/* Active Filters Summary */}
+              {hasActiveFilters ? (
+                <YStack gap={6}>
+                  <Text fontSize={12} fontWeight="600" color={C.muted}>
+                    Active filters
+                  </Text>
+                  <XStack flexWrap="wrap" gap={6}>
+                    {filters.searchTerm ? (
+                      <Pill tone="accent">{`Search: ${filters.searchTerm}`}</Pill>
+                    ) : null}
+                    {filters.shopId ? (
+                      <Pill tone="accent">{`Shop: ${getShopNameById(filters.shopId, shops)}`}</Pill>
+                    ) : null}
+                    {filters.minStock !== undefined ? (
+                      <Pill tone="accent">{`Min stock: ${filters.minStock}`}</Pill>
+                    ) : null}
+                    {filters.maxStock !== undefined ? (
+                      <Pill tone="accent">{`Max stock: ${filters.maxStock}`}</Pill>
+                    ) : null}
+                    {filters.isActive ? (
+                      <Pill tone="accent">
+                        {`Status: ${filters.isActive === 'active' ? 'Active' : 'Inactive'}`}
+                      </Pill>
+                    ) : null}
                   </XStack>
-
-                  {/* Active Filters Summary */}
-                  {hasActiveFilters && (
-                    <Card backgroundColor="$orange2" padding="$2" borderRadius="$2">
-                      <YStack space="$1">
-                        <Text fontSize="$2" fontWeight="600" color="$orange11">
-                          Active Filters:
-                        </Text>
-                        <XStack flexWrap="wrap" space="$1">
-                          {filters.searchTerm && (
-                            <Badge backgroundColor="$orange8">
-                              Search: {filters.searchTerm}
-                            </Badge>
-                          )}
-                          {filters.shopId && (
-                            <Badge backgroundColor="$green8">
-                              Shop: {getShopNameById(filters.shopId, shops)}
-                            </Badge>
-                          )}
-                          {filters.minStock !== undefined && (
-                            <Badge backgroundColor="$orange8">
-                              Min Stock: {filters.minStock}
-                            </Badge>
-                          )}
-                          {filters.maxStock !== undefined && (
-                            <Badge backgroundColor="$orange8">
-                              Max Stock: {filters.maxStock}
-                            </Badge>
-                          )}
-                          {filters.isActive && (
-                            <Badge backgroundColor={filters.isActive === 'active' ? '$green8' : '$red8'}>
-                              Status: {filters.isActive === 'active' ? 'Active' : 'Inactive'}
-                            </Badge>
-                          )}
-                        </XStack>
-                      </YStack>
-                    </Card>
-                  )}
-
-                  {/* Sort Info */}
-                  <Card backgroundColor="$orange2" padding="$2" borderRadius="$2">
-                    <XStack justifyContent="space-between" alignItems="center">
-                      <Text fontSize="$2" color="$orange11">
-                        Sorted by:
-                      </Text>
-                      <Text fontSize="$2" fontWeight="600" color="$orange12">
-                        {sortOption.field} ({sortOption.direction})
-                      </Text>
-                    </XStack>
-                  </Card>
                 </YStack>
-              </Card.Header>
-            </Card>
-          )}
+              ) : null}
+
+              {/* Sort Info */}
+              <XStack alignItems="center" gap={6}>
+                <Ionicons name="swap-vertical-outline" size={14} color={C.muted} />
+                <Text fontSize={13} color={C.muted}>
+                  {`Sorted by ${sortFieldLabels[sortOption.field] || sortOption.field} (${sortOption.direction === 'asc' ? 'ascending' : 'descending'})`}
+                </Text>
+              </XStack>
+            </YStack>
+          ) : null}
 
           {/* Products Grid */}
-          <YStack space="$3">
+          <YStack gap={12}>
             {filteredAndSortedProducts.map((product) => (
               <ProductCard
                 key={product.id}

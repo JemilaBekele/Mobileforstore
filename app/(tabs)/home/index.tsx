@@ -4,23 +4,19 @@ import {
   RefreshControl,
   Modal,
   TouchableWithoutFeedback,
+  TouchableOpacity,
   Keyboard,
 } from 'react-native';
 import {
-  Card,
   Text,
   XStack,
   YStack,
   Button,
   ScrollView,
   Spinner,
-  H4,
-  H3,
-  H2,
   Input,
-  Fieldset,
-  Label,
 } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 
@@ -30,94 +26,134 @@ import { Notification } from '@/(services)/socket';
 import { getUserDashboardSummary } from '@/(services)/api/dashboard';
 import { formatMoney, formatQty, toNumber } from '@/(utils)/format';
 
+type AlertType = 'expired' | 'lowStock' | 'expiringSoon';
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+// Severity look: only shown through the small pill / icon
+const SEVERITY: Record<AlertType, { label: string; bg: string; fg: string; icon: IconName }> = {
+  expired: { label: 'Expired', bg: '#FEE2E2', fg: '#991B1B', icon: 'close-circle-outline' },
+  lowStock: { label: 'Low stock', bg: '#FEF3C7', fg: '#92400E', icon: 'trending-down-outline' },
+  expiringSoon: { label: 'Expiring soon', bg: '#FEF3C7', fg: '#92400E', icon: 'time-outline' },
+};
+
 // White card with a light border, used for every section
-const SectionCard = ({ children, accent }: { children: React.ReactNode; accent?: string }) => (
-  <Card
-    bordered
-    borderRadius="$5"
-    backgroundColor="$orange1"
-    borderColor="$orange4"
+const SectionCard = ({ children }: { children: React.ReactNode }) => (
+  <YStack
+    backgroundColor="#FFFFFF"
     borderWidth={1}
-    borderLeftWidth={accent ? 4 : 1}
-    borderLeftColor={accent || '$orange4'}
+    borderColor="#E5E7EB"
+    borderRadius={16}
+    padding={16}
+    gap={12}
   >
-    <Card.Header padded>{children}</Card.Header>
-  </Card>
+    {children}
+  </YStack>
+);
+
+// Section heading with a small coloured icon badge
+const SectionTitle = ({
+  icon,
+  title,
+  iconColor = '#FF6B00',
+  iconBg = '#FFF7ED',
+  count,
+}: {
+  icon: IconName;
+  title: string;
+  iconColor?: string;
+  iconBg?: string;
+  count?: number;
+}) => (
+  <XStack alignItems="center" gap={10}>
+    <YStack width={32} height={32} borderRadius={10} alignItems="center" justifyContent="center" backgroundColor={iconBg}>
+      <Ionicons name={icon} size={18} color={iconColor} />
+    </YStack>
+    <Text flex={1} fontSize={16} fontWeight="700" color="#111827">
+      {title}
+    </Text>
+    {typeof count === 'number' ? (
+      <Text fontSize={14} fontWeight="700" color="#FF6B00">
+        {formatQty(count)}
+      </Text>
+    ) : null}
+  </XStack>
+);
+
+// Small tinted pill
+const Pill = ({ label, bg, fg }: { label: string; bg: string; fg: string }) => (
+  <YStack paddingHorizontal={8} paddingVertical={3} borderRadius={999} backgroundColor={bg}>
+    <Text fontSize={11} fontWeight="700" color={fg}>
+      {label}
+    </Text>
+  </YStack>
+);
+
+// Secondary (outlined) button
+const OutlineButton = ({ label, onPress }: { label: string; onPress: () => void }) => (
+  <Button
+    backgroundColor="#FFFFFF"
+    borderWidth={1}
+    borderColor="#E5E7EB"
+    borderRadius={12}
+    pressStyle={{ backgroundColor: '#F9FAFB', borderColor: '#E5E7EB' }}
+    onPress={onPress}
+  >
+    <Text color="#111827" fontWeight="600">
+      {label}
+    </Text>
+  </Button>
 );
 
 // Alert Item Component
-const AlertItem = ({ alert, type }: { alert: any; type: 'expired' | 'lowStock' | 'expiringSoon' }) => {
-  const getBackgroundColor = () => {
-    switch (type) {
-      case 'expired': return '$red2';
-      case 'lowStock': return '$orange2';
-      case 'expiringSoon': return '$yellow2';
-      default: return '$orange2';
-    }
-  };
-
-  const getTextColor = () => {
-    switch (type) {
-      case 'expired': return '$red11';
-      case 'lowStock': return '$orange12';
-      case 'expiringSoon': return '$yellow11';
-      default: return '$orange12';
-    }
-  };
-
-  const getSubTextColor = () => {
-    switch (type) {
-      case 'expired': return '$red10';
-      case 'lowStock': return '$orange11';
-      case 'expiringSoon': return '$yellow10';
-      default: return '$orange11';
-    }
-  };
-
+const AlertItem = ({ alert, type }: { alert: any; type: AlertType }) => {
+  const severity = SEVERITY[type];
   const unit = alert.unit || 'unit';
   const quantity = toNumber(alert.quantity);
   const warningQuantity = toNumber(alert.warningQuantity);
 
   return (
-    <Card
-      backgroundColor={getBackgroundColor()}
-      padding="$3"
-      borderRadius="$3"
-      marginVertical="$1"
+    <YStack
+      backgroundColor="#F9FAFB"
+      borderWidth={1}
+      borderColor="#F3F4F6"
+      padding={12}
+      borderRadius={12}
+      gap={4}
     >
-      <YStack space="$2">
-        <Text fontSize="$3" fontWeight="600" color={getTextColor()}>
+      <XStack justifyContent="space-between" alignItems="center" gap={8}>
+        <Text flex={1} fontSize={14} fontWeight="600" color="#111827" numberOfLines={2}>
           {alert.name || 'Unknown Product'}
         </Text>
-        <Text fontSize="$1" color={getSubTextColor()}>
-          {alert.locationName || 'Unknown Location'} • {alert.productCode || 'N/A'}
+        <Pill label={severity.label} bg={severity.bg} fg={severity.fg} />
+      </XStack>
+      <Text fontSize={12} color="#6B7280">
+        {alert.locationName || 'Unknown Location'} · {alert.productCode || 'N/A'}
+      </Text>
+      {type === 'lowStock' ? (
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text fontSize={13} fontWeight="700" color="#111827">
+            {formatQty(quantity)} {unit} left
+          </Text>
+          <Text fontSize={12} color="#6B7280">
+            Alert at {formatQty(warningQuantity)} {unit}
+          </Text>
+        </XStack>
+      ) : (
+        <Text fontSize={12} color="#6B7280">
+          Batch: {alert.batchNumber || 'N/A'} · Qty: {formatQty(quantity)} {unit}
         </Text>
-        {type === 'lowStock' ? (
-          <XStack justifyContent="space-between" alignItems="center">
-            <Text fontSize="$2" fontWeight="700" color="$orange9">
-              {formatQty(quantity)} {unit} left
-            </Text>
-            <Text fontSize="$1" color={getSubTextColor()}>
-              Alert at {formatQty(warningQuantity)} {unit}
-            </Text>
-          </XStack>
-        ) : (
-          <Text fontSize="$1" color={getSubTextColor()}>
-            Batch: {alert.batchNumber || 'N/A'} • Qty: {formatQty(quantity)} {unit}
-          </Text>
-        )}
-        {type === 'expired' ? (
-          <Text fontSize="$1" color={getSubTextColor()} fontStyle="italic">
-            Expired: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
-          </Text>
-        ) : null}
-        {type === 'expiringSoon' ? (
-          <Text fontSize="$1" color={getSubTextColor()} fontStyle="italic">
-            Expires: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
-          </Text>
-        ) : null}
-      </YStack>
-    </Card>
+      )}
+      {type === 'expired' ? (
+        <Text fontSize={12} color="#374151">
+          Expired: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
+        </Text>
+      ) : null}
+      {type === 'expiringSoon' ? (
+        <Text fontSize={12} color="#374151">
+          Expires: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
+        </Text>
+      ) : null}
+    </YStack>
   );
 };
 
@@ -135,11 +171,12 @@ const FullListModal = ({
   onClose: () => void;
   title: string;
   items: any[];
-  type: 'expired' | 'lowStock' | 'expiringSoon';
+  type: AlertType;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
 }) => {
   const [filteredItems, setFilteredItems] = useState(items);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -171,68 +208,73 @@ const FullListModal = ({
         >
           <TouchableWithoutFeedback>
             <YStack
-              backgroundColor="$orange1"
-              borderTopLeftRadius="$6"
-              borderTopRightRadius="$6"
-              padding="$4"
+              backgroundColor="#FFFFFF"
+              borderTopLeftRadius={20}
+              borderTopRightRadius={20}
+              padding={16}
               maxHeight="85%"
-              borderWidth={1}
-              borderColor="$orange4"
             >
               <ScrollView showsVerticalScrollIndicator={false}>
-                <YStack space="$4">
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <H4 color="$orange12" fontWeight="800">{title}</H4>
-                    <Button
-                      size="$2"
-                      circular
-                      backgroundColor="$orange2"
-                      borderColor="$orange4"
-                      borderWidth={1}
+                <YStack gap={12}>
+                  <XStack justifyContent="space-between" alignItems="center" gap={12}>
+                    <YStack flex={1}>
+                      <Text fontSize={18} fontWeight="700" color="#111827">{title}</Text>
+                      <Text fontSize={13} color="#6B7280">
+                        Total: {formatQty(items.length)} items
+                      </Text>
+                    </YStack>
+                    <TouchableOpacity
                       onPress={onClose}
+                      accessibilityLabel="Close"
+                      style={{ padding: 6 }}
                     >
-                      <Text color="$orange12">✕</Text>
-                    </Button>
+                      <Ionicons name="close" size={22} color="#6B7280" />
+                    </TouchableOpacity>
                   </XStack>
 
-                  <Text fontSize="$2" color="$orange11">
-                    Total: {formatQty(items.length)} items
-                  </Text>
-
                   {/* Search Input */}
-                  <Fieldset>
-                    <Label htmlFor="search" fontSize="$3" fontWeight="600" color="$orange11">
-                      Search
-                    </Label>
+                  <XStack
+                    alignItems="center"
+                    backgroundColor="#FFFFFF"
+                    borderWidth={1}
+                    borderColor={searchFocused ? '#FF6B00' : '#E5E7EB'}
+                    borderRadius={12}
+                    paddingLeft={12}
+                  >
+                    <Ionicons name="search" size={18} color="#6B7280" />
                     <Input
-                      id="search"
+                      flex={1}
                       placeholder="Search by name, code, batch, or location..."
                       value={searchQuery}
                       onChangeText={setSearchQuery}
-                      borderColor="$orange5"
-                      backgroundColor="$orange1"
-                      borderRadius="$4"
-                      focusStyle={{ borderColor: '$orange9' }}
+                      onFocus={() => setSearchFocused(true)}
+                      onBlur={() => setSearchFocused(false)}
+                      backgroundColor="transparent"
+                      borderWidth={0}
+                      focusStyle={{ borderWidth: 0 }}
+                      color="#111827"
+                      fontSize={15}
+                      paddingHorizontal={10}
+                      placeholderTextColor="#9CA3AF"
                     />
-                  </Fieldset>
+                  </XStack>
 
                   {/* Search Results Summary */}
                   {searchQuery ? (
-                    <Card backgroundColor="$orange2" padding="$2" borderRadius="$2">
-                      <Text fontSize="$2" color="$orange11">
-                        Found {filteredItems.length} items matching &quot;{searchQuery}&quot;
-                      </Text>
-                    </Card>
+                    <Text fontSize={13} color="#6B7280">
+                      Found {filteredItems.length} items matching &quot;{searchQuery}&quot;
+                    </Text>
                   ) : null}
 
                   {/* Items List */}
-                  <YStack space="$2">
+                  <YStack gap={8}>
                     {filteredItems.length === 0 ? (
-                      <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
-                        <Text color="$orange11" textAlign="center">
+                      <YStack alignItems="center" padding={20} gap={8}>
+                        <Ionicons name="search-outline" size={28} color="#9CA3AF" />
+                        <Text color="#6B7280" textAlign="center">
                           No items found{searchQuery ? ' matching your search' : ''}
                         </Text>
-                      </Card>
+                      </YStack>
                     ) : (
                       filteredItems.map((alert, index) => (
                         <AlertItem key={`${type}-${alert.id || index}-${alert.batchId || ''}-${alert.locationName || ''}`} alert={alert} type={type} />
@@ -240,15 +282,7 @@ const FullListModal = ({
                     )}
                   </YStack>
 
-                  <Button
-                    backgroundColor="$orange1"
-                    borderColor="$orange9"
-                    borderWidth={1}
-                    borderRadius="$4"
-                    onPress={onClose}
-                  >
-                    <Text color="$orange9" fontWeight="700">Close</Text>
-                  </Button>
+                  <OutlineButton label="Close" onPress={onClose} />
                 </YStack>
               </ScrollView>
             </YStack>
@@ -263,27 +297,31 @@ const FullListModal = ({
 const StatTile = ({
   value,
   label,
-  color,
-  backgroundColor,
+  valueColor = '#111827',
+  icon,
+  iconColor,
 }: {
   value: string;
   label: string;
-  color: string;
-  backgroundColor: string;
+  valueColor?: string;
+  icon?: IconName;
+  iconColor?: string;
 }) => (
   <YStack
     flex={1}
     minWidth={90}
-    alignItems="center"
-    padding="$3"
-    backgroundColor={backgroundColor}
-    borderRadius="$4"
-    space="$1"
+    padding={12}
+    backgroundColor="#FFFFFF"
+    borderWidth={1}
+    borderColor="#E5E7EB"
+    borderRadius={12}
+    gap={4}
   >
-    <Text fontSize="$5" fontWeight="800" color={color} numberOfLines={1} adjustsFontSizeToFit>
+    {icon ? <Ionicons name={icon} size={18} color={iconColor || '#6B7280'} /> : null}
+    <Text fontSize={20} fontWeight="800" color={valueColor} numberOfLines={1} adjustsFontSizeToFit>
       {value}
     </Text>
-    <Text fontSize="$1" color="$orange11" fontWeight="600" textAlign="center">
+    <Text fontSize={12} color="#6B7280" fontWeight="600">
       {label}
     </Text>
   </YStack>
@@ -337,13 +375,13 @@ const DashboardScreen = () => {
   // Setup real-time notification listener
   useEffect(() => {
     const handleNewNotification = (notification: Notification) => {
-      console.log('📢 Real-time notification received on dashboard:', notification);
+      console.log('Real-time notification received on dashboard:', notification);
 
       setNotifications(prev => [notification, ...prev.slice(0, 9)]);
       setShowNotificationBadge(true);
 
       Alert.alert(
-        '🚨 New Sale Approved!',
+        'New Sale Approved',
         notification.message,
         [
           {
@@ -429,18 +467,19 @@ const DashboardScreen = () => {
   // Show empty state when no data after loading
   if (!isLoading && !refreshing && !dashboardData) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1" padding="$4">
-        <Text fontSize="$8" marginBottom="$4">📊</Text>
-        <H3 color="$orange12" fontWeight="800" textAlign="center" marginBottom="$2">
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="#FFFFFF" padding={16} gap={12}>
+        <Ionicons name="bar-chart-outline" size={40} color="#9CA3AF" />
+        <Text fontSize={18} color="#111827" fontWeight="700" textAlign="center">
           No Dashboard Data
-        </H3>
-        <Text color="$orange11" textAlign="center" marginBottom="$4">
+        </Text>
+        <Text color="#6B7280" fontSize={14} textAlign="center">
           Unable to load dashboard information. Please check your connection and try again.
         </Text>
         <Button
-          backgroundColor="$orange9"
-          borderRadius="$4"
-          pressStyle={{ backgroundColor: '$orange10' }}
+          backgroundColor="#FF6B00"
+          borderWidth={0}
+          borderRadius={12}
+          pressStyle={{ backgroundColor: '#EA580C' }}
           onPress={handleRefresh}
         >
           <Text color="white" fontWeight="700">
@@ -454,276 +493,253 @@ const DashboardScreen = () => {
   // Show loading state during initial load
   if (isLoading && !refreshing && !dashboardData) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1">
-        <Spinner size="large" color="$orange9" />
-        <Text marginTop="$4" color="$orange12" fontSize="$5" fontWeight="600">
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="#FFFFFF" gap={8}>
+        <Spinner size="large" color="#FF6B00" />
+        <Text color="#111827" fontSize={16} fontWeight="600">
           Loading alerts...
         </Text>
-        <Text marginTop="$2" color="$orange11" fontSize="$2" textAlign="center">
+        <Text color="#6B7280" fontSize={13} textAlign="center">
           Fetching your alert data
         </Text>
       </YStack>
     );
   }
 
+  const expiredCount = stockAlerts.expiredProducts?.length || 0;
+  const lowStockCount = stockAlerts.lowStockProducts?.length || 0;
+  const expiringCount = stockAlerts.expiringSoonProducts?.length || 0;
+
   return (
-    <YStack flex={1} backgroundColor="$orange1">
+    <YStack flex={1} backgroundColor="#FFFFFF">
+      {/* Header */}
+      <YStack
+        paddingHorizontal={16}
+        paddingTop={16}
+        paddingBottom={12}
+        borderBottomWidth={1}
+        borderBottomColor="#E5E7EB"
+        backgroundColor="#FFFFFF"
+        gap={2}
+      >
+        <Text fontSize={24} fontWeight="700" color="#111827">
+          Alerts Dashboard
+        </Text>
+        <Text fontSize={14} color="#6B7280">
+          {formatQty(userShopsCount)} shop{userShopsCount === 1 ? '' : 's'} · {formatQty(userStoresCount)} store{userStoresCount === 1 ? '' : 's'}
+        </Text>
+      </YStack>
+
       <ScrollView
         flex={1}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#FF6B00']} tintColor="#FF6B00" />
         }
       >
         {/* Show refreshing indicator at top */}
         {refreshing ? (
-          <XStack justifyContent="center" padding="$2" backgroundColor="$orange2">
-            <Spinner size="small" color="$orange9" />
-            <Text marginLeft="$2" color="$orange11" fontSize="$2">
+          <XStack justifyContent="center" alignItems="center" padding={8} gap={8}>
+            <Spinner size="small" color="#FF6B00" />
+            <Text color="#6B7280" fontSize={13}>
               Refreshing alerts...
             </Text>
           </XStack>
         ) : null}
 
-        <YStack space="$4" padding="$4">
-          {/* Header */}
-          <YStack space="$1" paddingTop="$2">
-            <H2 fontWeight="800" color="$orange12">
-              Alerts Dashboard
-            </H2>
-            <YStack width={44} height={3} borderRadius={2} backgroundColor="$orange9" />
-            <Text fontSize="$2" color="$orange11" marginTop="$1">
-              {formatQty(userShopsCount)} shop{userShopsCount === 1 ? '' : 's'} · {formatQty(userStoresCount)} store{userStoresCount === 1 ? '' : 's'}
-            </Text>
-          </YStack>
-
+        <YStack gap={12} padding={16}>
           {/* Sales overview */}
           {salesStats ? (
             <SectionCard>
-              <YStack space="$3">
-                <H4 color="$orange12" fontWeight="700">Sales Overview</H4>
-                <XStack space="$2" flexWrap="wrap">
-                  <StatTile
-                    value={formatMoney(salesStats.totalRevenue)}
-                    label="Net revenue"
-                    color="$orange9"
-                    backgroundColor="$orange2"
-                  />
-                  <StatTile
-                    value={formatQty(toNumber(salesStats.totalSales))}
-                    label="Sales"
-                    color="$orange12"
-                    backgroundColor="$orange2"
-                  />
+              <SectionTitle icon="stats-chart-outline" title="Sales Overview" />
+              <XStack gap={12} flexWrap="wrap">
+                <StatTile
+                  value={formatMoney(salesStats.totalRevenue)}
+                  label="Net revenue"
+                  valueColor="#FF6B00"
+                />
+                <StatTile
+                  value={formatQty(toNumber(salesStats.totalSales))}
+                  label="Sales"
+                />
+              </XStack>
+              {toNumber(salesStats.totalGrossRevenue) > 0 ? (
+                <XStack justifyContent="space-between">
+                  <Text fontSize={13} color="#6B7280">Gross revenue</Text>
+                  <Text fontSize={13} fontWeight="700" color="#111827">
+                    {formatMoney(salesStats.totalGrossRevenue)}
+                  </Text>
                 </XStack>
-                {toNumber(salesStats.totalGrossRevenue) > 0 ? (
-                  <XStack justifyContent="space-between">
-                    <Text fontSize="$2" color="$orange11">Gross revenue</Text>
-                    <Text fontSize="$2" fontWeight="700" color="$orange12">
-                      {formatMoney(salesStats.totalGrossRevenue)}
-                    </Text>
-                  </XStack>
-                ) : null}
-              </YStack>
+              ) : null}
             </SectionCard>
           ) : null}
 
           {/* Real-time notifications */}
           {notifications.length > 0 ? (
-            <SectionCard accent="$orange9">
-              <YStack space="$2">
-                <XStack justifyContent="space-between" alignItems="center">
-                  <H4 color="$orange12" fontWeight="700">🔔 Real-time Updates</H4>
-                  <Button
-                    size="$2"
-                    backgroundColor="$orange1"
-                    borderColor="$orange9"
-                    borderWidth={1}
-                    borderRadius="$3"
-                    onPress={clearNotifications}
-                  >
-                    <Text color="$orange9" fontSize="$1" fontWeight="700">
-                      Clear
-                    </Text>
-                  </Button>
-                </XStack>
-
-                {notifications.slice(0, 3).map((notification, index) => (
-                  <Card
-                    key={`notification-${notification.id || notification.createdAt || index}`}
-                    backgroundColor="$orange2"
-                    padding="$3"
-                    borderRadius="$3"
-                    marginVertical="$1"
-                  >
-                    <YStack space="$1">
-                      <Text fontSize="$3" fontWeight="600" color="$orange12">
-                        {notification.title}
-                      </Text>
-                      <Text fontSize="$2" color="$orange11">
-                        {notification.message}
-                      </Text>
-                      <Text fontSize="$1" color="$orange10">
-                        {new Date(notification.createdAt).toLocaleTimeString()}
-                      </Text>
-                    </YStack>
-                  </Card>
-                ))}
-
-                {notifications.length > 3 ? (
-                  <Text fontSize="$1" color="$orange11" textAlign="center">
-                    +{notifications.length - 3} more notifications
+            <SectionCard>
+              <XStack justifyContent="space-between" alignItems="center" gap={8}>
+                <YStack flex={1}>
+                  <SectionTitle icon="notifications-outline" title="Real-time Updates" />
+                </YStack>
+                <TouchableOpacity onPress={clearNotifications} style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
+                  <Text color="#FF6B00" fontSize={13} fontWeight="700">
+                    Clear
                   </Text>
-                ) : null}
-              </YStack>
+                </TouchableOpacity>
+              </XStack>
+
+              {notifications.slice(0, 3).map((notification, index) => (
+                <YStack
+                  key={`notification-${notification.id || notification.createdAt || index}`}
+                  backgroundColor="#F9FAFB"
+                  borderWidth={1}
+                  borderColor="#F3F4F6"
+                  padding={12}
+                  borderRadius={12}
+                  gap={2}
+                >
+                  <Text fontSize={14} fontWeight="600" color="#111827">
+                    {notification.title}
+                  </Text>
+                  <Text fontSize={13} color="#374151">
+                    {notification.message}
+                  </Text>
+                  <Text fontSize={12} color="#6B7280">
+                    {new Date(notification.createdAt).toLocaleTimeString()}
+                  </Text>
+                </YStack>
+              ))}
+
+              {notifications.length > 3 ? (
+                <Text fontSize={12} color="#6B7280" textAlign="center">
+                  +{notifications.length - 3} more notifications
+                </Text>
+              ) : null}
             </SectionCard>
           ) : null}
 
           {/* Show loading overlay during refresh */}
           {refreshing ? (
-            <Card backgroundColor="$orange2" padding="$3" borderRadius="$3">
-              <XStack alignItems="center" justifyContent="center" space="$3">
-                <Spinner size="small" color="$orange9" />
-                <Text color="$orange11" fontSize="$3" fontWeight="600">
-                  Updating alert data...
-                </Text>
-              </XStack>
-            </Card>
+            <XStack alignItems="center" justifyContent="center" gap={8} padding={12} borderWidth={1} borderColor="#E5E7EB" borderRadius={12}>
+              <Spinner size="small" color="#FF6B00" />
+              <Text color="#6B7280" fontSize={14} fontWeight="600">
+                Updating alert data...
+              </Text>
+            </XStack>
           ) : null}
 
-          {/* Alerts Content */}
-          <YStack space="$4">
-            {/* Alert Summary */}
+          {/* Alert Summary */}
+          <SectionCard>
+            <SectionTitle icon="warning-outline" title="Alert Summary" count={totalAlerts} />
+            <XStack gap={8} flexWrap="wrap">
+              <StatTile
+                value={formatQty(expiredCount)}
+                label="Expired"
+                icon={SEVERITY.expired.icon}
+                iconColor="#DC2626"
+              />
+              <StatTile
+                value={formatQty(lowStockCount)}
+                label="Low Stock"
+                icon={SEVERITY.lowStock.icon}
+                iconColor="#D97706"
+              />
+              <StatTile
+                value={formatQty(expiringCount)}
+                label="Expiring Soon"
+                icon={SEVERITY.expiringSoon.icon}
+                iconColor="#D97706"
+              />
+            </XStack>
+          </SectionCard>
+
+          {/* Show empty state if no alerts */}
+          {totalAlerts === 0 ? (
             <SectionCard>
-              <YStack space="$3">
-                <H4 color="$orange12" fontWeight="700">Alert Summary</H4>
-
-                <XStack space="$2" flexWrap="wrap">
-                  <StatTile
-                    value={`❌ ${formatQty(stockAlerts.expiredProducts?.length || 0)}`}
-                    label="Expired"
-                    color="$red10"
-                    backgroundColor="$red2"
-                  />
-                  <StatTile
-                    value={`📉 ${formatQty(stockAlerts.lowStockProducts?.length || 0)}`}
-                    label="Low Stock"
-                    color="$orange9"
-                    backgroundColor="$orange2"
-                  />
-                  <StatTile
-                    value={`⏰ ${formatQty(stockAlerts.expiringSoonProducts?.length || 0)}`}
-                    label="Expiring Soon"
-                    color="$yellow10"
-                    backgroundColor="$yellow2"
-                  />
-                </XStack>
-
-                <Text fontSize="$2" color="$orange11" textAlign="center">
-                  Total Alerts: {formatQty(totalAlerts)}
+              <YStack alignItems="center" gap={6} paddingVertical={8}>
+                <YStack width={44} height={44} borderRadius={22} backgroundColor="#DCFCE7" alignItems="center" justifyContent="center">
+                  <Ionicons name="checkmark-circle-outline" size={24} color="#166534" />
+                </YStack>
+                <Text fontSize={16} fontWeight="700" color="#111827" textAlign="center">
+                  No Active Alerts
+                </Text>
+                <Text fontSize={13} color="#6B7280" textAlign="center">
+                  Great job! All systems are running smoothly.
                 </Text>
               </YStack>
             </SectionCard>
+          ) : null}
 
-            {/* Show empty state if no alerts */}
-            {totalAlerts === 0 ? (
-              <Card backgroundColor="$green1" borderColor="$green4" borderWidth={1} padding="$4" borderRadius="$5">
-                <YStack alignItems="center" space="$2">
-                  <Text fontSize="$6">✅</Text>
-                  <Text fontSize="$4" fontWeight="600" color="$green11" textAlign="center">
-                    No Active Alerts
-                  </Text>
-                  <Text fontSize="$2" color="$green10" textAlign="center">
-                    Great job! All systems are running smoothly.
-                  </Text>
-                </YStack>
-              </Card>
-            ) : null}
+          {/* Expired Products */}
+          {expiredCount > 0 ? (
+            <SectionCard>
+              <SectionTitle
+                icon={SEVERITY.expired.icon}
+                iconColor="#DC2626"
+                iconBg="#FEE2E2"
+                title="Expired Products"
+                count={expiredCount}
+              />
 
-            {/* Expired Products */}
-            {stockAlerts.expiredProducts?.length > 0 ? (
-              <SectionCard accent="$red9">
-                <YStack space="$3">
-                  <H4 color="$red11" fontWeight="700">❌ Expired Products</H4>
+              {stockAlerts.expiredProducts.slice(0, 5).map((alert: unknown, index: number) => (
+                <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expired" />
+              ))}
 
-                  {stockAlerts.expiredProducts.slice(0, 5).map((alert: unknown, index: number) => (
-                    <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expired" />
-                  ))}
+              {expiredCount > 5 ? (
+                <OutlineButton
+                  label={`View all ${expiredCount} expired items`}
+                  onPress={() => setShowExpiredModal(true)}
+                />
+              ) : null}
+            </SectionCard>
+          ) : null}
 
-                  {stockAlerts.expiredProducts.length > 5 ? (
-                    <Button
-                      size="$3"
-                      backgroundColor="$orange1"
-                      borderColor="$red9"
-                      borderWidth={1}
-                      borderRadius="$3"
-                      onPress={() => setShowExpiredModal(true)}
-                    >
-                      <Text color="$red10" fontWeight="700">
-                        View all {stockAlerts.expiredProducts.length} expired items
-                      </Text>
-                    </Button>
-                  ) : null}
-                </YStack>
-              </SectionCard>
-            ) : null}
+          {/* Low Stock Products */}
+          {lowStockCount > 0 ? (
+            <SectionCard>
+              <SectionTitle
+                icon={SEVERITY.lowStock.icon}
+                iconColor="#D97706"
+                iconBg="#FEF3C7"
+                title="Low Stock Products"
+                count={lowStockCount}
+              />
 
-            {/* Low Stock Products */}
-            {stockAlerts.lowStockProducts?.length > 0 ? (
-              <SectionCard accent="$orange9">
-                <YStack space="$3">
-                  <H4 color="$orange12" fontWeight="700">📉 Low Stock Products</H4>
+              {stockAlerts.lowStockProducts.slice(0, 10).map((alert: unknown, index: number) => (
+                <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="lowStock" />
+              ))}
 
-                  {stockAlerts.lowStockProducts.slice(0, 10).map((alert: unknown, index: number) => (
-                    <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="lowStock" />
-                  ))}
+              {lowStockCount > 10 ? (
+                <OutlineButton
+                  label={`View all ${lowStockCount} low stock items`}
+                  onPress={() => setShowLowStockModal(true)}
+                />
+              ) : null}
+            </SectionCard>
+          ) : null}
 
-                  {stockAlerts.lowStockProducts.length > 10 ? (
-                    <Button
-                      size="$3"
-                      backgroundColor="$orange1"
-                      borderColor="$orange9"
-                      borderWidth={1}
-                      borderRadius="$3"
-                      onPress={() => setShowLowStockModal(true)}
-                    >
-                      <Text color="$orange9" fontWeight="700">
-                        View all {stockAlerts.lowStockProducts.length} low stock items
-                      </Text>
-                    </Button>
-                  ) : null}
-                </YStack>
-              </SectionCard>
-            ) : null}
+          {/* Expiring Soon Products */}
+          {expiringCount > 0 ? (
+            <SectionCard>
+              <SectionTitle
+                icon={SEVERITY.expiringSoon.icon}
+                iconColor="#D97706"
+                iconBg="#FEF3C7"
+                title="Expiring Soon"
+                count={expiringCount}
+              />
 
-            {/* Expiring Soon Products */}
-            {stockAlerts.expiringSoonProducts?.length > 0 ? (
-              <SectionCard accent="$yellow9">
-                <YStack space="$3">
-                  <H4 color="$yellow11" fontWeight="700">⏰ Expiring Soon</H4>
+              {stockAlerts.expiringSoonProducts.slice(0, 10).map((alert: unknown, index: number) => (
+                <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expiringSoon" />
+              ))}
 
-                  {stockAlerts.expiringSoonProducts.slice(0, 10).map((alert: unknown, index: number) => (
-                    <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expiringSoon" />
-                  ))}
-
-                  {stockAlerts.expiringSoonProducts.length > 10 ? (
-                    <Button
-                      size="$3"
-                      backgroundColor="$orange1"
-                      borderColor="$yellow9"
-                      borderWidth={1}
-                      borderRadius="$3"
-                      onPress={() => setShowExpiringSoonModal(true)}
-                    >
-                      <Text color="$yellow11" fontWeight="700">
-                        View all {stockAlerts.expiringSoonProducts.length} expiring items
-                      </Text>
-                    </Button>
-                  ) : null}
-                </YStack>
-              </SectionCard>
-            ) : null}
-          </YStack>
+              {expiringCount > 10 ? (
+                <OutlineButton
+                  label={`View all ${expiringCount} expiring items`}
+                  onPress={() => setShowExpiringSoonModal(true)}
+                />
+              ) : null}
+            </SectionCard>
+          ) : null}
         </YStack>
       </ScrollView>
 
@@ -734,7 +750,7 @@ const DashboardScreen = () => {
           setShowExpiredModal(false);
           setExpiredSearchQuery('');
         }}
-        title="❌ All Expired Products"
+        title="All Expired Products"
         items={stockAlerts.expiredProducts || []}
         type="expired"
         searchQuery={expiredSearchQuery}
@@ -747,7 +763,7 @@ const DashboardScreen = () => {
           setShowLowStockModal(false);
           setLowStockSearchQuery('');
         }}
-        title="📉 All Low Stock Products"
+        title="All Low Stock Products"
         items={stockAlerts.lowStockProducts || []}
         type="lowStock"
         searchQuery={lowStockSearchQuery}
@@ -760,7 +776,7 @@ const DashboardScreen = () => {
           setShowExpiringSoonModal(false);
           setExpiringSoonSearchQuery('');
         }}
-        title="⏰ All Expiring Soon Products"
+        title="All Expiring Soon Products"
         items={stockAlerts.expiringSoonProducts || []}
         type="expiringSoon"
         searchQuery={expiringSoonSearchQuery}

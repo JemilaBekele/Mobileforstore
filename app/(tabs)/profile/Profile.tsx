@@ -1,22 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
-import {
-  ScrollView,
-  YStack,
-  H4,
-  Card,
-  Input,
-  Fieldset,
-  Label,
-  Button,
-  Text,
-  XStack,
-  Spinner
-} from 'tamagui';
+import { ScrollView, YStack, Input, Button, Text, XStack, Spinner } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
 import { useAppSelector } from '@/(redux)/hooks';
 import { updateUserByIdAction, clearError } from '@/(redux)/authSlice';
 import type { AppDispatch } from '@/(redux)/store';
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+// Labelled input with a leading icon; orange border when focused, red on error
+const FormField = ({
+  label,
+  icon,
+  error,
+  editable = true,
+  ...inputProps
+}: {
+  label: string;
+  icon: IconName;
+  error?: string;
+  editable?: boolean;
+} & React.ComponentProps<typeof Input>) => {
+  const [focused, setFocused] = useState(false);
+  return (
+    <YStack gap={6}>
+      <Text fontSize={14} fontWeight="600" color="#374151">
+        {label}
+      </Text>
+      <XStack
+        alignItems="center"
+        backgroundColor={editable ? '#FFFFFF' : '#F9FAFB'}
+        borderWidth={1}
+        borderColor={error ? '#DC2626' : focused ? '#FF6B00' : '#E5E7EB'}
+        borderRadius={12}
+        paddingLeft={12}
+      >
+        <Ionicons name={icon} size={18} color="#6B7280" />
+        <Input
+          flex={1}
+          {...inputProps}
+          editable={editable}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          backgroundColor="transparent"
+          borderWidth={0}
+          focusStyle={{ borderWidth: 0 }}
+          color="#111827"
+          fontSize={15}
+          paddingHorizontal={10}
+          placeholderTextColor="#9CA3AF"
+        />
+      </XStack>
+      {error ? (
+        <Text fontSize={12} color="#DC2626">
+          {error}
+        </Text>
+      ) : null}
+    </YStack>
+  );
+};
 
 export default function ProfileInfo() {
   const dispatch = useDispatch<AppDispatch>();
@@ -181,214 +224,177 @@ export default function ProfileInfo() {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
 
   return (
-    <ScrollView flex={1} backgroundColor="$orange1">
-      <YStack flex={1} padding="$4" space="$4">
-        <YStack space="$1" marginBottom="$2">
-          <H4 color="$orange12" fontWeight="800">
-            Account Information
-          </H4>
-          <YStack width={40} height={3} borderRadius={2} backgroundColor="$orange9" />
-          <Text fontSize="$3" color="$orange11" marginTop="$2">
-            Update your personal information
-          </Text>
-        </YStack>
+    <ScrollView flex={1} backgroundColor="#FFFFFF">
+      <YStack
+        paddingHorizontal={16}
+        paddingTop={16}
+        paddingBottom={12}
+        borderBottomWidth={1}
+        borderBottomColor="#E5E7EB"
+        gap={2}
+      >
+        <Text fontSize={24} fontWeight="700" color="#111827">
+          Account Information
+        </Text>
+        <Text fontSize={14} color="#6B7280">
+          Update your personal information
+        </Text>
+      </YStack>
 
+      <YStack flex={1} padding={16} gap={12}>
         {/* Success Message */}
-        {showSuccess && (
-          <Card backgroundColor="$green2" borderColor="$green6" borderWidth={1} borderRadius="$4" padding="$3" marginBottom="$4">
-            <XStack alignItems="center" space="$2">
-              <Text color="$green11" fontSize="$4">✅</Text>
-              <Text color="$green11" fontWeight="600" fontSize="$3">
-                Profile updated successfully!
-              </Text>
-            </XStack>
-          </Card>
-        )}
+        {showSuccess ? (
+          <XStack
+            alignItems="center"
+            gap={8}
+            padding={12}
+            borderRadius={12}
+            backgroundColor="#F0FDF4"
+            borderWidth={1}
+            borderColor="#BBF7D0"
+          >
+            <Ionicons name="checkmark-circle-outline" size={18} color="#166534" />
+            <Text color="#166534" fontWeight="600" fontSize={14}>
+              Profile updated successfully!
+            </Text>
+          </XStack>
+        ) : null}
 
-        <Card bordered borderWidth={1} borderColor="$orange4" borderRadius="$5" padding="$4" backgroundColor="$orange1">
-          <YStack space="$4">
-            {/* Name Field */}
-            <Fieldset>
-              <Label htmlFor="name" color="$orange11" fontSize="$3" fontWeight="600">
-                Full Name *
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChangeText={(text) => handleInputChange('name', text)}
-                borderColor={validationErrors.name ? "$red8" : "$orange4"}
-                focusStyle={{ borderColor: validationErrors.name ? "$red8" : "$orange9" }}
-                backgroundColor={isEditing ? "$orange1" : "$orange2"}
-                color="$orange12"
-                borderRadius="$4"
-                placeholder="Enter your full name"
-                editable={isEditing}
-              />
-              {validationErrors.name ? (
-                <Text color="$red10" fontSize="$2" marginTop="$2">
-                  {validationErrors.name}
+        <YStack backgroundColor="#FFFFFF" borderWidth={1} borderColor="#E5E7EB" borderRadius={16} padding={16} gap={14}>
+          <FormField
+            label="Full Name *"
+            icon="person-outline"
+            value={formData.name}
+            onChangeText={(text) => handleInputChange('name', text)}
+            error={validationErrors.name}
+            placeholder="Enter your full name"
+            editable={isEditing}
+          />
+
+          <FormField
+            label="Email Address *"
+            icon="mail-outline"
+            value={formData.email}
+            onChangeText={(text) => handleInputChange('email', text)}
+            error={validationErrors.email}
+            placeholder="Enter your email address"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={isEditing}
+          />
+
+          <FormField
+            label="Phone Number"
+            icon="call-outline"
+            value={formData.phone}
+            onChangeText={(text) => handleInputChange('phone', text)}
+            error={validationErrors.phone}
+            placeholder="Enter your phone number"
+            keyboardType="phone-pad"
+            editable={isEditing}
+          />
+
+          {/* Read-only Information */}
+          {!isEditing ? (
+            <YStack borderTopWidth={1} borderTopColor="#F3F4F6">
+              <XStack justifyContent="space-between" alignItems="center" paddingVertical={10}>
+                <Text color="#6B7280" fontSize={14}>Role</Text>
+                <Text color="#111827" fontSize={14} fontWeight="600">
+                  {roleValue}
                 </Text>
-              ) : null}
-            </Fieldset>
-
-            {/* Email Field */}
-            <Fieldset>
-              <Label htmlFor="email" color="$orange11" fontSize="$3" fontWeight="600">
-                Email Address *
-              </Label>
-              <Input
-                id="email"
-                value={formData.email}
-                onChangeText={(text) => handleInputChange('email', text)}
-                borderColor={validationErrors.email ? "$red8" : "$orange4"}
-                focusStyle={{ borderColor: validationErrors.email ? "$red8" : "$orange9" }}
-                backgroundColor={isEditing ? "$orange1" : "$orange2"}
-                color="$orange12"
-                borderRadius="$4"
-                placeholder="Enter your email address"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={isEditing}
-              />
-              {validationErrors.email ? (
-                <Text color="$red10" fontSize="$2" marginTop="$2">
-                  {validationErrors.email}
-                </Text>
-              ) : null}
-            </Fieldset>
-
-            {/* Phone Field */}
-            <Fieldset>
-              <Label htmlFor="phone" color="$orange11" fontSize="$3" fontWeight="600">
-                Phone Number
-              </Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChangeText={(text) => handleInputChange('phone', text)}
-                borderColor={validationErrors.phone ? "$red8" : "$orange4"}
-                focusStyle={{ borderColor: validationErrors.phone ? "$red8" : "$orange9" }}
-                backgroundColor={isEditing ? "$orange1" : "$orange2"}
-                color="$orange12"
-                borderRadius="$4"
-                placeholder="Enter your phone number"
-                keyboardType="phone-pad"
-                editable={isEditing}
-              />
-              {validationErrors.phone ? (
-                <Text color="$red10" fontSize="$2" marginTop="$2">
-                  {validationErrors.phone}
-                </Text>
-              ) : null}
-            </Fieldset>
-
-            {/* Read-only Information */}
-            {!isEditing && (
-              <YStack space="$3" marginTop="$2">
-                <Card backgroundColor="$orange2" padding="$3" borderRadius="$4">
-                  <YStack space="$2">
-
-                    <XStack justifyContent="space-between">
-                      <Text color="$orange11" fontSize="$3">Role:</Text>
-                      <Text color="$orange12" fontSize="$3" fontWeight="500">
-                        {roleValue}
-                      </Text>
-                    </XStack>
-                    <XStack justifyContent="space-between">
-                      <Text color="$orange11" fontSize="$3">Branch:</Text>
-                      <Text color="$orange12" fontSize="$3" fontWeight="500">
-                        {branchValue}
-                      </Text>
-                    </XStack>
-                    {/* <XStack justifyContent="space-between">
-                      <Text color="$orange11" fontSize="$3">Status:</Text>
-                      <Text color="$orange12" fontSize="$3" fontWeight="500">
-                        {user?.status === 'active' ? '🟢 Active' : '🔴 Inactive'}
-                      </Text>
-                    </XStack> */}
-                  </YStack>
-                </Card>
-              </YStack>
-            )}
-
-            {/* Action Buttons */}
-            {isEditing ? (
-              <XStack space="$3" marginTop="$2">
-                <Button
-                  flex={1}
-                  backgroundColor="$orange9"
-                  borderRadius="$4"
-                  pressStyle={{ backgroundColor: "$orange10" }}
-                  onPress={handleUpdate}
-                  disabled={!isFormValid || !hasChanges || loading}
-                  opacity={!isFormValid || !hasChanges || loading ? 0.6 : 1}
-                >
-                  {loading ? (
-                    <XStack alignItems="center" space="$2">
-                      <Spinner size="small" color="white" />
-                      <Text color="white" fontWeight="600">Updating...</Text>
-                    </XStack>
-                  ) : (
-                    <Text color="white" fontWeight="600">Save Changes</Text>
-                  )}
-                </Button>
-                <Button
-                  flex={1}
-                  variant="outlined"
-                  borderColor="$orange9"
-                  borderWidth={1}
-                  borderRadius="$4"
-                  backgroundColor="$orange1"
-                  onPress={handleCancel}
-                  disabled={loading}
-                >
-                  <Text color="$orange9" fontWeight="700">Cancel</Text>
-                </Button>
               </XStack>
-            ) : (
-              <Button
-                backgroundColor="$orange9"
-                borderRadius="$4"
-                pressStyle={{ backgroundColor: "$orange10" }}
-                onPress={() => setIsEditing(true)}
-                marginTop="$2"
-              >
-                <Text color="white" fontWeight="700">Edit Profile</Text>
-              </Button>
-            )}
-          </YStack>
-        </Card>
-
-        {/* Form Status */}
-        {isEditing && (
-          <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} borderRadius="$4" padding="$3">
-            <YStack space="$1">
-              <Text fontSize="$3" fontWeight="600" color="$orange12">
-                Form Status:
-              </Text>
-              <XStack alignItems="center" space="$2">
-                <Text color={isFormValid ? "$green9" : "$orange9"} fontSize="$2">
-                  {isFormValid ? "✓" : "○"}
+              <YStack height={1} backgroundColor="#F3F4F6" />
+              <XStack justifyContent="space-between" alignItems="center" paddingVertical={10}>
+                <Text color="#6B7280" fontSize={14}>Branch</Text>
+                <Text color="#111827" fontSize={14} fontWeight="600">
+                  {branchValue}
                 </Text>
-                <Text color="$orange11" fontSize="$2">All required fields are valid</Text>
-              </XStack>
-              <XStack alignItems="center" space="$2">
-                <Text color={hasChanges ? "$green9" : "$orange9"} fontSize="$2">
-                  {hasChanges ? "✓" : "○"}
-                </Text>
-                <Text color="$orange11" fontSize="$2">Changes made to form</Text>
               </XStack>
             </YStack>
-          </Card>
-        )}
+          ) : null}
+
+          {/* Action Buttons */}
+          {isEditing ? (
+            <XStack gap={12}>
+              <Button
+                flex={1}
+                backgroundColor="#FFFFFF"
+                borderWidth={1}
+                borderColor="#E5E7EB"
+                borderRadius={12}
+                pressStyle={{ backgroundColor: '#F9FAFB', borderColor: '#E5E7EB' }}
+                onPress={handleCancel}
+                disabled={loading}
+              >
+                <Text color="#111827" fontWeight="600">Cancel</Text>
+              </Button>
+              <Button
+                flex={1}
+                backgroundColor="#FF6B00"
+                borderWidth={0}
+                borderRadius={12}
+                pressStyle={{ backgroundColor: '#EA580C' }}
+                onPress={handleUpdate}
+                disabled={!isFormValid || !hasChanges || loading}
+                opacity={!isFormValid || !hasChanges || loading ? 0.6 : 1}
+              >
+                {loading ? (
+                  <XStack alignItems="center" gap={8}>
+                    <Spinner size="small" color="white" />
+                    <Text color="white" fontWeight="700">Updating...</Text>
+                  </XStack>
+                ) : (
+                  <Text color="white" fontWeight="700">Save Changes</Text>
+                )}
+              </Button>
+            </XStack>
+          ) : (
+            <Button
+              backgroundColor="#FF6B00"
+              borderWidth={0}
+              borderRadius={12}
+              pressStyle={{ backgroundColor: '#EA580C' }}
+              onPress={() => setIsEditing(true)}
+              icon={<Ionicons name="create-outline" size={18} color="white" />}
+            >
+              <Text color="white" fontWeight="700">Edit Profile</Text>
+            </Button>
+          )}
+        </YStack>
+
+        {/* Form Status */}
+        {isEditing ? (
+          <YStack backgroundColor="#FFFFFF" borderWidth={1} borderColor="#E5E7EB" borderRadius={12} padding={12} gap={6}>
+            <Text fontSize={14} fontWeight="600" color="#111827">
+              Form status
+            </Text>
+            <XStack alignItems="center" gap={8}>
+              <Ionicons
+                name={isFormValid ? 'checkmark-circle' : 'ellipse-outline'}
+                size={16}
+                color={isFormValid ? '#16A34A' : '#9CA3AF'}
+              />
+              <Text color="#374151" fontSize={13}>All required fields are valid</Text>
+            </XStack>
+            <XStack alignItems="center" gap={8}>
+              <Ionicons
+                name={hasChanges ? 'checkmark-circle' : 'ellipse-outline'}
+                size={16}
+                color={hasChanges ? '#16A34A' : '#9CA3AF'}
+              />
+              <Text color="#374151" fontSize={13}>Changes made to form</Text>
+            </XStack>
+          </YStack>
+        ) : null}
 
         {/* User Information Note */}
-        <Card backgroundColor="$orange2" borderRadius="$4" padding="$3">
-          <Text fontSize="$2" color="$orange11" textAlign="center">
+        <XStack gap={8} alignItems="flex-start" paddingHorizontal={4}>
+          <Ionicons name="information-circle-outline" size={16} color="#6B7280" />
+          <Text flex={1} fontSize={12} color="#6B7280">
             * Required fields. Only name, email, and phone can be updated. Other information is managed by administrators.
           </Text>
-        </Card>
+        </XStack>
       </YStack>
     </ScrollView>
   );

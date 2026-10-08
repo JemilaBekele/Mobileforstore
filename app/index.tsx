@@ -7,9 +7,7 @@ import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/(redux)/store";
 import { login, restoreSession } from "@/(redux)/authSlice";
-import { AppColors } from "@/constants/colors";
 import {
-  Card,
   Text,
   XStack,
   YStack,
@@ -18,6 +16,7 @@ import {
   ScrollView,
   Spinner,
 } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
 
 const loginImage = require('@/assets/images/loginn.jpg');
 
@@ -38,6 +37,7 @@ export default function LoginScreen() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState<"email" | "password" | null>(null);
   // true while checking for a saved login from a previous launch
   const [checkingSession, setCheckingSession] = useState(true);
 
@@ -87,222 +87,246 @@ export default function LoginScreen() {
   const getMessageStyles = () => {
     switch (messageType) {
       case "error":
-        return { bg: "$red2", borderColor: "$red7", color: "$red11" };
+        return { bg: "#FEF2F2", borderColor: "#FECACA", color: "#991B1B", icon: "alert-circle-outline" as const };
       case "success":
-        return { bg: "$green2", borderColor: "$green7", color: "$green11" };
+        return { bg: "#F0FDF4", borderColor: "#BBF7D0", color: "#166534", icon: "checkmark-circle-outline" as const };
       case "info":
-        return { bg: "$orange2", borderColor: "$orange6", color: "$orange12" };
+        return { bg: "#FFF7ED", borderColor: "#FED7AA", color: "#C2410C", icon: "information-circle-outline" as const };
       default:
-        return { bg: "$orange2", borderColor: "$orange4", color: "$orange11" };
+        return { bg: "#F9FAFB", borderColor: "#E5E7EB", color: "#374151", icon: "information-circle-outline" as const };
     }
   };
 
   const messageStyles = getMessageStyles();
 
+  const fieldBorder = (field: "email" | "password", hasError: boolean) =>
+    hasError ? "#DC2626" : focusedField === field ? "#FF6B00" : "#E5E7EB";
+
   if (checkingSession) {
     return (
       <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor="#FFFFFF">
-        <Spinner size="large" color={AppColors.primary} />
+        <Spinner size="large" color="#FF6B00" />
       </YStack>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: AppColors.surface }}
+      style={{ flex: 1, backgroundColor: "#FFFFFF" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        backgroundColor="$orange1"
+        backgroundColor="#FFFFFF"
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "center"
         }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <YStack flex={1} justifyContent="center" padding="$4" space="$4" backgroundColor="$orange1">
+        <YStack flex={1} justifyContent="center" padding={24} gap={24} width="100%" maxWidth={440} alignSelf="center">
           {/* Header */}
-          <YStack alignItems="center" marginBottom="$2" space="$3">
-            <YStack
-              width={168}
-              height={168}
-              borderRadius={84}
-              backgroundColor="$orange2"
-              alignItems="center"
-              justifyContent="center"
-              overflow="hidden"
-            >
-              <Image
-                source={loginImage}
-                style={{
-                  width: 150,
-                  height: 150,
-                  resizeMode: "contain",
-                }}
-              />
-            </YStack>
-            <YStack alignItems="center" space="$2">
-              <Text fontSize="$9" fontWeight="800" color="$orange12" textAlign="center">
-                Stock <Text fontSize="$9" fontWeight="800" color="$orange9">Management</Text>
+          <YStack alignItems="center" gap={12}>
+            <Image
+              source={loginImage}
+              style={{
+                width: 140,
+                height: 140,
+                resizeMode: "contain",
+              }}
+            />
+            <YStack alignItems="center" gap={4}>
+              <Text fontSize={26} fontWeight="800" color="#111827" textAlign="center">
+                Stock Management
               </Text>
-              <YStack width={48} height={4} borderRadius={2} backgroundColor="$orange9" />
+              <Text fontSize={14} color="#6B7280" textAlign="center">
+                Sign in to your staff account
+              </Text>
             </YStack>
           </YStack>
 
           {/* Login Card */}
-          <Card
-            size="$4"
-            bordered
-            backgroundColor="$orange1"
-            borderColor="$orange4"
+          <YStack
+            backgroundColor="#FFFFFF"
             borderWidth={1}
-            borderRadius="$6"
+            borderColor="#E5E7EB"
+            borderRadius={16}
+            padding={20}
+            gap={16}
+            shadowColor="#000"
+            shadowOpacity={0.05}
+            shadowRadius={8}
+            shadowOffset={{ width: 0, height: 2 }}
           >
-            <Card.Header padded>
-              <Text fontSize="$7" fontWeight="800" color="$orange12" marginBottom="$1">
-                Login
-              </Text>
-              <Text fontSize="$3" color="$orange11" marginBottom="$3">
-                Sign in with your staff account
-              </Text>
+            <Text fontSize={20} fontWeight="700" color="#111827">
+              Login
+            </Text>
 
-              {/* Message Display */}
-              {message ? (
-                <YStack
-                  padding="$3"
-                  borderRadius="$3"
-                  marginBottom="$3"
-                  backgroundColor={messageStyles.bg}
-                  borderColor={messageStyles.borderColor}
-                  borderWidth={1}
-                >
-                  <Text
-                    textAlign="center"
-                    fontSize="$3"
-                    color={messageStyles.color}
-                  >
-                    {message}
-                  </Text>
-                </YStack>
-              ) : null}
-
-              <Formik
-                innerRef={formikRef}
-                initialValues={{ email: "", password: "" }}
-                validationSchema={LoginSchema}
-                onSubmit={handleLogin}
+            {/* Message Display */}
+            {message ? (
+              <XStack
+                padding={12}
+                borderRadius={10}
+                gap={8}
+                alignItems="center"
+                backgroundColor={messageStyles.bg}
+                borderColor={messageStyles.borderColor}
+                borderWidth={1}
               >
-                {({
-                  handleChange,
-                  handleBlur,
-                  handleSubmit,
-                  values,
-                  errors,
-                  touched,
-                  isValid,
-                  dirty,
-                }) => (
-                  <YStack space="$3">
-                    {/* Email Input */}
-                    <YStack space="$2">
-                      <Text fontSize="$3" fontWeight="600" color="$orange11">
-                        Email
-                      </Text>
+                <Ionicons name={messageStyles.icon} size={18} color={messageStyles.color} />
+                <Text flex={1} fontSize={14} color={messageStyles.color}>
+                  {message}
+                </Text>
+              </XStack>
+            ) : null}
+
+            <Formik
+              innerRef={formikRef}
+              initialValues={{ email: "", password: "" }}
+              validationSchema={LoginSchema}
+              onSubmit={handleLogin}
+            >
+              {({
+                handleChange,
+                handleBlur,
+                handleSubmit,
+                values,
+                errors,
+                touched,
+                isValid,
+                dirty,
+              }) => (
+                <YStack gap={14}>
+                  {/* Email Input */}
+                  <YStack gap={6}>
+                    <Text fontSize={14} fontWeight="600" color="#374151">
+                      Email
+                    </Text>
+                    <XStack
+                      alignItems="center"
+                      backgroundColor="#FFFFFF"
+                      borderWidth={1}
+                      borderColor={fieldBorder("email", !!(errors.email && touched.email))}
+                      borderRadius={12}
+                      paddingLeft={12}
+                    >
+                      <Ionicons name="mail-outline" size={18} color="#6B7280" />
                       <Input
+                        flex={1}
                         placeholder="Enter your email"
                         value={values.email}
                         onChangeText={handleChange("email")}
-                        onBlur={handleBlur("email")}
+                        onFocus={() => setFocusedField("email")}
+                        onBlur={(e) => {
+                          setFocusedField(null);
+                          handleBlur("email")(e);
+                        }}
                         keyboardType="email-address"
                         autoCapitalize="none"
                         autoCorrect={false}
-                        borderColor={errors.email && touched.email ? "$red8" : "$orange4"}
-                        focusStyle={{ borderColor: errors.email && touched.email ? "$red8" : "$orange9" }}
-                        backgroundColor="$orange1"
-                        color="$orange12"
-                        borderRadius="$4"
+                        backgroundColor="transparent"
+                        borderWidth={0}
+                        focusStyle={{ borderWidth: 0 }}
+                        color="#111827"
+                        fontSize={15}
+                        paddingHorizontal={10}
                         size="$4"
-                        placeholderTextColor="$orange11"
+                        placeholderTextColor="#9CA3AF"
                       />
-                      {errors.email && touched.email ? (
-                        <Text fontSize="$2" color="$red10" marginLeft="$2">
-                          {errors.email}
-                        </Text>
-                      ) : null}
-                    </YStack>
-
-                    {/* Password Input */}
-                    <YStack space="$2">
-                      <Text fontSize="$3" fontWeight="600" color="$orange11">
-                        Password
+                    </XStack>
+                    {errors.email && touched.email ? (
+                      <Text fontSize={12} color="#DC2626">
+                        {errors.email}
                       </Text>
+                    ) : null}
+                  </YStack>
+
+                  {/* Password Input */}
+                  <YStack gap={6}>
+                    <Text fontSize={14} fontWeight="600" color="#374151">
+                      Password
+                    </Text>
+                    <XStack
+                      alignItems="center"
+                      backgroundColor="#FFFFFF"
+                      borderWidth={1}
+                      borderColor={fieldBorder("password", !!(errors.password && touched.password))}
+                      borderRadius={12}
+                      paddingLeft={12}
+                    >
+                      <Ionicons name="lock-closed-outline" size={18} color="#6B7280" />
                       <Input
+                        flex={1}
                         placeholder="Enter your password"
                         value={values.password}
                         onChangeText={handleChange("password")}
-                        onBlur={handleBlur("password")}
+                        onFocus={() => setFocusedField("password")}
+                        onBlur={(e) => {
+                          setFocusedField(null);
+                          handleBlur("password")(e);
+                        }}
                         secureTextEntry
                         autoCapitalize="none"
-                        borderColor={errors.password && touched.password ? "$red8" : "$orange4"}
-                        focusStyle={{ borderColor: errors.password && touched.password ? "$red8" : "$orange9" }}
-                        backgroundColor="$orange1"
-                        color="$orange12"
-                        borderRadius="$4"
+                        backgroundColor="transparent"
+                        borderWidth={0}
+                        focusStyle={{ borderWidth: 0 }}
+                        color="#111827"
+                        fontSize={15}
+                        paddingHorizontal={10}
                         size="$4"
-                        placeholderTextColor="$orange11"
+                        placeholderTextColor="#9CA3AF"
                       />
-                      {errors.password && touched.password ? (
-                        <Text fontSize="$2" color="$red10" marginLeft="$2">
-                          {errors.password}
-                        </Text>
-                      ) : null}
-                    </YStack>
-
-                    {/* Forgot Password */}
-                    <XStack justifyContent="flex-end" marginTop="$1">
-                      <Button
-                        unstyled
-                        onPress={handleForgotPassword}
-                        pressStyle={{ opacity: 0.7 }}
-                      >
-                        <Text color="$orange9" fontSize="$3" fontWeight="600">
-                          Forgot Password?
-                        </Text>
-                      </Button>
                     </XStack>
-
-                    {/* Login Button */}
-                    <Button
-                      onPress={() => handleSubmit()}
-                      disabled={!isValid || !dirty || isLoading}
-                      opacity={(!isValid || !dirty || isLoading) ? 0.6 : 1}
-                      backgroundColor="$orange9"
-                      borderColor="$orange9"
-                      borderRadius="$4"
-                      pressStyle={{ backgroundColor: "$orange10", borderColor: "$orange10" }}
-                      size="$4"
-                      marginTop="$2"
-                      icon={isLoading ? () => <Spinner size="small" color="white" /> : undefined}
-                    >
-                      {isLoading ? (
-                        <Text color="white" fontWeight="600">
-                          Signing in...
-                        </Text>
-                      ) : (
-                        <Text color="white" fontWeight="700">
-                          Login
-                        </Text>
-                      )}
-                    </Button>
+                    {errors.password && touched.password ? (
+                      <Text fontSize={12} color="#DC2626">
+                        {errors.password}
+                      </Text>
+                    ) : null}
                   </YStack>
-                )}
-              </Formik>
-            </Card.Header>
-          </Card>
+
+                  {/* Forgot Password */}
+                  <XStack justifyContent="flex-end">
+                    <Button
+                      unstyled
+                      onPress={handleForgotPassword}
+                      pressStyle={{ opacity: 0.7 }}
+                    >
+                      <Text color="#FF6B00" fontSize={14} fontWeight="600">
+                        Forgot Password?
+                      </Text>
+                    </Button>
+                  </XStack>
+
+                  {/* Login Button */}
+                  <Button
+                    onPress={() => handleSubmit()}
+                    disabled={!isValid || !dirty || isLoading}
+                    opacity={(!isValid || !dirty || isLoading) ? 0.6 : 1}
+                    backgroundColor="#FF6B00"
+                    borderWidth={0}
+                    borderRadius={12}
+                    pressStyle={{ backgroundColor: "#EA580C" }}
+                    height={50}
+                    icon={isLoading ? () => <Spinner size="small" color="white" /> : undefined}
+                  >
+                    {isLoading ? (
+                      <Text color="white" fontWeight="700" fontSize={16}>
+                        Signing in...
+                      </Text>
+                    ) : (
+                      <Text color="white" fontWeight="700" fontSize={16}>
+                        Login
+                      </Text>
+                    )}
+                  </Button>
+                </YStack>
+              )}
+            </Formik>
+          </YStack>
 
           {/* Footer */}
-          <YStack alignItems="center" marginTop="$4">
-            <Text color="$orange11" fontSize="$2">
+          <YStack alignItems="center">
+            <Text color="#9CA3AF" fontSize={12}>
               Stock Management System
             </Text>
           </YStack>

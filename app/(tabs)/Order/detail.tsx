@@ -5,8 +5,6 @@ import {
   YStack,
   XStack,
   Text,
-  Card,
-  H4,
   Button,
   Spinner,
   Input,
@@ -22,6 +20,7 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SellItem, ProductBatch, DeliveryData } from '@/(utils)/types';
 import {
@@ -30,21 +29,88 @@ import {
   partialSaleDelivery,
 } from '@/(services)/api/sell';
 import { formatMoney } from '@/(utils)/format';
-import { AppColors } from '@/constants/colors';
+import { normalizeImagePath } from '@/(utils)/image';
 
-// Status badge colours (white/orange theme)
-const SALE_STATUS_COLORS: Record<string, string> = {
-  DELIVERED: AppColors.success,
-  PARTIALLY_DELIVERED: AppColors.warning,
-  APPROVED: AppColors.info,
-  CANCELLED: AppColors.error,
-  NOT_APPROVED: AppColors.textSecondary,
+// Presentation palette (white, black text, orange accent) - same as the sales app
+const C = {
+  accent: '#FF6B00',
+  accentTint: '#FFF7ED',
+  text: '#111827',
+  label: '#374151',
+  muted: '#6B7280',
+  placeholder: '#9CA3AF',
+  border: '#E5E7EB',
+  subtle: '#F9FAFB',
+  danger: '#DC2626',
+  success: '#166534',
 };
 
-const ITEM_STATUS_COLORS: Record<string, string> = {
-  DELIVERED: AppColors.success,
-  PENDING: AppColors.primary,
+// Light-tint pill colours for sale / item statuses
+const statusPill = (status: string): { bg: string; fg: string } => {
+  switch (status) {
+    case 'DELIVERED': return { bg: '#DCFCE7', fg: '#166534' };
+    case 'APPROVED': return { bg: '#FFF7ED', fg: '#C2410C' };
+    case 'PARTIALLY_DELIVERED': return { bg: '#FEF3C7', fg: '#92400E' };
+    case 'PENDING': return { bg: '#FEF3C7', fg: '#92400E' };
+    case 'CANCELLED': return { bg: '#FEE2E2', fg: '#991B1B' };
+    case 'NOT_APPROVED': return { bg: '#F3F4F6', fg: '#374151' };
+    default: return { bg: '#F3F4F6', fg: '#374151' };
+  }
 };
+
+const StatusPill = ({ status, label }: { status: string; label: string }) => {
+  const { bg, fg } = statusPill(status);
+  return (
+    <YStack backgroundColor={bg} paddingHorizontal={10} paddingVertical={3} borderRadius={999}>
+      <Text color={fg} fontSize={12} fontWeight="700">
+        {label}
+      </Text>
+    </YStack>
+  );
+};
+
+const InfoRow = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <XStack justifyContent="space-between" alignItems="center" gap="$3">
+    <Text color={C.label} fontSize={14}>{label}</Text>
+    {children}
+  </XStack>
+);
+
+const SectionCard = ({ children, gap = 10 }: { children: React.ReactNode; gap?: number }) => (
+  <YStack
+    backgroundColor="white"
+    borderWidth={1}
+    borderColor={C.border}
+    borderRadius={14}
+    padding={14}
+    gap={gap}
+  >
+    {children}
+  </YStack>
+);
+
+const primaryBtn = {
+  backgroundColor: C.accent,
+  borderWidth: 0,
+  borderRadius: 10,
+  pressStyle: { backgroundColor: '$orange10' },
+} as const;
+
+const secondaryBtn = {
+  backgroundColor: 'white',
+  borderColor: C.border,
+  borderWidth: 1,
+  borderRadius: 10,
+  pressStyle: { backgroundColor: C.subtle, borderColor: C.border },
+} as const;
+
+const dangerBtn = {
+  backgroundColor: 'white',
+  borderColor: C.danger,
+  borderWidth: 1,
+  borderRadius: 10,
+  pressStyle: { backgroundColor: '#FEF2F2', borderColor: C.danger },
+} as const;
 
 const getProductName = (item: SellItem) =>
   item.product?.name || `Product ${item.productId?.slice(-8) || 'Unknown'}`;
@@ -54,19 +120,6 @@ const getSubProductLabel = (item?: SellItem | null): string | null => {
   const sub = item?.subProduct;
   if (!sub?.name) return null;
   return sub.subProductCode ? `${sub.name} (${sub.subProductCode})` : sub.name;
-};
-
-// Add the normalizeImagePath function
-const BACKEND_URL = "https://ordere.net";
-
-export const normalizeImagePath = (path?: string) => {
-  if (!path) return undefined;
-  const normalizedPath = path.replace(/\\/g, '/');
-  if (normalizedPath.startsWith('http')) {
-    return normalizedPath;
-  }
-  const cleanPath = normalizedPath.replace(/^\/+/, '');
-  return `${BACKEND_URL}/${cleanPath}`;
 };
 
 interface BatchSelection {
@@ -541,8 +594,6 @@ export default function SellDetailPage() {
     setShowConfirmModal(false);
   };
 
-  const getStatusColor = (status: string) =>
-    SALE_STATUS_COLORS[status] || AppColors.textMuted;
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -555,9 +606,6 @@ export default function SellDetailPage() {
     }
   };
 
-  const getItemStatusColor = (status: string) =>
-    ITEM_STATUS_COLORS[status] || AppColors.textMuted;
-
   const getItemStatusText = (status: string) => {
     switch (status) {
       case 'DELIVERED': return 'Delivered';
@@ -568,9 +616,9 @@ export default function SellDetailPage() {
 
   if (loading && !refreshing) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1">
-        <Spinner size="large" color="$orange9" />
-        <Text marginTop="$4" color="$orange11" fontSize="$5" fontWeight="600">
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="white">
+        <Spinner size="large" color={C.accent} />
+        <Text marginTop="$4" color={C.muted} fontSize={15} fontWeight="500">
           Loading sale details...
         </Text>
       </YStack>
@@ -579,340 +627,356 @@ export default function SellDetailPage() {
 
   if (!sell) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$orange1" padding="$4">
-        <Text fontSize="$6" color="$orange9">📊</Text>
-        <Text fontSize="$5" fontWeight="600" color="$orange11" textAlign="center" marginVertical="$4">
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="white" padding={16} gap={12}>
+        <YStack
+          width={56}
+          height={56}
+          borderRadius={999}
+          backgroundColor={C.accentTint}
+          alignItems="center"
+          justifyContent="center"
+        >
+          <Ionicons name="receipt-outline" size={26} color={C.accent} />
+        </YStack>
+        <Text fontSize={16} fontWeight="600" color={C.text} textAlign="center">
           Loading sale details...
         </Text>
-        <Button
-          backgroundColor="$orange9"
-          onPress={handleGoBack}
-        >
-          <Text color="white" fontWeight="600">Go Back</Text>
+        <Button {...primaryBtn} onPress={handleGoBack}>
+          <Text color="white" fontWeight="700">Go Back</Text>
         </Button>
       </YStack>
     );
   }
 
   return (
-    <YStack flex={1} backgroundColor="$orange1" paddingTop={insets.top}>
+    <YStack flex={1} backgroundColor="white" paddingTop={insets.top}>
       {/* Header */}
-      <Card
+      <XStack
         backgroundColor="white"
         borderBottomWidth={1}
-        borderBottomColor="$orange4"
-        borderRadius={0}
-        padding="$4"
+        borderBottomColor={C.border}
+        padding={16}
+        alignItems="center"
+        gap={12}
       >
-        <XStack justifyContent="space-between" alignItems="center">
-          <Button
-            size="$2"
-            circular
-            backgroundColor="$orange3"
-            onPress={handleGoBack}
-          >
-            <Text color="$orange11">←</Text>
-          </Button>
-          
-          <YStack alignItems="center" flex={1}>
-            <H4 color="$orange12">Sale Details</H4>
-            <Text fontSize="$1" color="$orange10">
-              {sell.invoiceNo}
-            </Text>
-          </YStack>
-          
-          <XStack
-            backgroundColor={getStatusColor(sell.saleStatus)}
-            paddingHorizontal="$2"
-            paddingVertical="$1"
-            borderRadius="$2"
-          >
-            <Text color="white" fontSize="$1" fontWeight="700">
-              {getStatusText(sell.saleStatus)}
-            </Text>
-          </XStack>
-        </XStack>
-      </Card>
+        <Button
+          size="$3"
+          circular
+          {...secondaryBtn}
+          onPress={handleGoBack}
+          icon={<Ionicons name="arrow-back" size={18} color={C.text} />}
+        />
+        <YStack flex={1}>
+          <Text color={C.text} fontSize={24} fontWeight="700">
+            Sale Details
+          </Text>
+          <Text fontSize={13} color={C.muted} numberOfLines={1}>
+            {sell.invoiceNo}
+          </Text>
+        </YStack>
+        <StatusPill status={sell.saleStatus} label={getStatusText(sell.saleStatus)} />
+      </XStack>
 
       {/* Content */}
-      <ScrollView 
-        flex={1} 
+      <ScrollView
+        flex={1}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: 16 }}
       >
-        <YStack space="$4">
+        <YStack gap={12}>
           {/* Sale Information Card */}
-          <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$4" borderRadius="$4">
-            <YStack space="$3">
-              <H4 color="$orange12" borderBottomWidth={1} borderBottomColor="$orange4" paddingBottom="$2">
-                Sale Information
-              </H4>
-              
-              <XStack justifyContent="space-between">
-                <Text fontWeight="600" color="$orange11">Invoice Number:</Text>
-                <Text color="$orange12">{sell.invoiceNo}</Text>
-              </XStack>
-              
-              <XStack justifyContent="space-between">
-                <Text fontWeight="600" color="$orange11">Sale Date:</Text>
-                <Text color="$orange12">
-                  {new Date(sell.saleDate).toLocaleDateString()} at {new Date(sell.saleDate).toLocaleTimeString()}
-                </Text>
-              </XStack>
-              
-              {sell.branch && (
-                <XStack justifyContent="space-between">
-                  <Text fontWeight="600" color="$orange11">Branch:</Text>
-                  <Text color="$orange12">{sell.branch.name}</Text>
-                </XStack>
-              )}
-              
-              {sell.customer && (
-                <XStack justifyContent="space-between">
-                  <Text fontWeight="600" color="$orange11">Customer:</Text>
-                  <Text color="$orange12">{sell.customer.name}</Text>
-                  {sell.customer.phone && (
-                    <Text color="$orange10">{sell.customer.phone}</Text>
-                  )}
-                </XStack>
-              )}
-              
-              <XStack justifyContent="space-between">
-                <Text fontWeight="600" color="$orange11">Total Products:</Text>
-                <Text color="$orange12">{sell.totalProducts}</Text>
-              </XStack>
-            </YStack>
-          </Card>
+          <SectionCard>
+            <Text color={C.text} fontSize={16} fontWeight="700">
+              Sale Information
+            </Text>
+
+            <InfoRow label="Invoice Number">
+              <Text color={C.text} fontWeight="600">{sell.invoiceNo}</Text>
+            </InfoRow>
+
+            <InfoRow label="Sale Date">
+              <Text color={C.text} flexShrink={1} textAlign="right">
+                {new Date(sell.saleDate).toLocaleDateString()} at {new Date(sell.saleDate).toLocaleTimeString()}
+              </Text>
+            </InfoRow>
+
+            {sell.branch ? (
+              <InfoRow label="Branch">
+                <Text color={C.text}>{sell.branch.name}</Text>
+              </InfoRow>
+            ) : null}
+
+            {sell.customer ? (
+              <InfoRow label="Customer">
+                <YStack alignItems="flex-end" flexShrink={1}>
+                  <Text color={C.text} fontWeight="600">{sell.customer.name}</Text>
+                  {sell.customer.phone ? (
+                    <Text color={C.muted} fontSize={12}>{sell.customer.phone}</Text>
+                  ) : null}
+                </YStack>
+              </InfoRow>
+            ) : null}
+
+            <InfoRow label="Total Products">
+              <Text color={C.text}>{sell.totalProducts}</Text>
+            </InfoRow>
+          </SectionCard>
 
           {/* Items List with Batch Management */}
-          <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$4" borderRadius="$4">
-            <H4 color="$orange12" marginBottom="$3">Order Items</H4>
-            <YStack space="$4">
-              {sell.items?.map((item, index) => {
-                const selectedBatchesForItem = getSelectedBatchesForItem(item.id);
-                const totalSelected = getTotalSelectedQuantity(item.id);
-                const isFullyAllocated = isItemFullyAllocated(item.id, item.quantity);
-                
-                return (
-                  <Card key={item.id} backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$3" borderRadius="$3">
-                    <YStack space="$3">
-                      {/* Item Header with Image */}
-                      <XStack space="$3" alignItems="flex-start">
-                        {item.product?.imageUrl && (
-                          <Image
-                            source={{ uri: normalizeImagePath(item.product.imageUrl) }}
-                            width={80}
-                            height={80}
-                            borderRadius="$3"
-                            resizeMode="cover"
-                            backgroundColor="$orange2"
-                          />
-                        )}
-                        <YStack flex={1}>
-                          <Text fontWeight="700" color="$orange12" numberOfLines={2}>
-                            {getProductName(item)}
-                          </Text>
-                          {getSubProductLabel(item) && (
-                            <Text fontSize="$2" fontWeight="600" color="$orange10" numberOfLines={1}>
-                              {getSubProductLabel(item)}
-                            </Text>
-                          )}
-                          <Text fontSize="$2" color="$orange11">
-                            Shop: {item.shop?.name || 'Unknown Shop'}
-                          </Text>
-                          <Text fontSize="$2" color="$orange11">
-                            Unit: {item.unitOfMeasure?.name || item.unitOfMeasure?.symbol || 'unit'}
-                          </Text>
-                          <XStack justifyContent="space-between" marginTop="$2">
-                            <Text fontWeight="700" color="$orange10">
-                              {formatMoney(item.unitPrice)}
-                            </Text>
-                            <Text fontSize="$2" color="$orange10">
-                              x{item.quantity || 0}
-                            </Text>
-                          </XStack>
-                        </YStack>
-                      </XStack>
-                      
-                      {/* Item Status */}
-                      <XStack justifyContent="space-between" alignItems="center">
-                        <XStack
-                          backgroundColor={getItemStatusColor(item.itemSaleStatus || 'PENDING')}
-                          paddingHorizontal="$2"
-                          paddingVertical="$1"
-                          borderRadius="$2"
-                        >
-                          <Text color="white" fontSize="$1" fontWeight="700">
-                            {getItemStatusText(item.itemSaleStatus || 'PENDING')}
-                          </Text>
-                        </XStack>
-                        <Text fontWeight="600" color="$orange12">
-                          {formatMoney(item.totalPrice)}
+          <YStack gap={10}>
+            <Text color={C.text} fontSize={16} fontWeight="700">
+              Order Items ({sell.items?.length || 0})
+            </Text>
+            {sell.items?.map((item) => {
+              const selectedBatchesForItem = getSelectedBatchesForItem(item.id);
+              const totalSelected = getTotalSelectedQuantity(item.id);
+              const isFullyAllocated = isItemFullyAllocated(item.id, item.quantity);
+              const subLabel = getSubProductLabel(item);
+
+              return (
+                <YStack
+                  key={item.id}
+                  backgroundColor="white"
+                  borderWidth={1}
+                  borderColor={C.border}
+                  borderRadius={12}
+                  padding={12}
+                  gap={12}
+                >
+                  {/* Item Header with Image */}
+                  <XStack gap={12} alignItems="flex-start">
+                    {item.product?.imageUrl ? (
+                      <Image
+                        source={{ uri: normalizeImagePath(item.product.imageUrl) }}
+                        width={72}
+                        height={72}
+                        borderRadius={10}
+                        resizeMode="cover"
+                        backgroundColor={C.subtle}
+                      />
+                    ) : null}
+                    <YStack flex={1} gap={2}>
+                      <Text fontWeight="700" color={C.text} numberOfLines={2}>
+                        {getProductName(item)}
+                      </Text>
+                      {subLabel ? (
+                        <Text fontSize={12} fontWeight="600" color={C.label} numberOfLines={1}>
+                          {subLabel}
+                        </Text>
+                      ) : null}
+                      <Text fontSize={12} color={C.muted}>
+                        Shop: {item.shop?.name || 'Unknown Shop'}
+                      </Text>
+                      <Text fontSize={12} color={C.muted}>
+                        Unit: {item.unitOfMeasure?.name || item.unitOfMeasure?.symbol || 'unit'}
+                      </Text>
+                      <XStack justifyContent="space-between" marginTop={4}>
+                        <Text fontWeight="600" color={C.text}>
+                          {formatMoney(item.unitPrice)}
+                        </Text>
+                        <Text fontSize={12} color={C.muted}>
+                          x{item.quantity || 0}
                         </Text>
                       </XStack>
-                      
-                      {/* Batch Allocation Status */}
-                      <YStack space="$2">
-                        <XStack justifyContent="space-between" alignItems="center">
-                          <Text fontSize="$2" color="$orange11" fontWeight="600">
-                            Batch Allocation:
-                          </Text>
-                          <Text fontSize="$2" color={isFullyAllocated ? "$green10" : "$orange10"}>
-                            {totalSelected}/{item.quantity} units allocated
-                          </Text>
-                        </XStack>
-                        
-                        {/* Selected Batches */}
-                        {selectedBatchesForItem.length > 0 && (
-                          <YStack space="$1">
-                            {selectedBatchesForItem.map((batch, idx) => (
-                              <XStack key={idx} justifyContent="space-between" alignItems="center">
-                                <Text fontSize="$1" color="$blue10">
-                                  Batch {batch.batchId.slice(-6)}
-                                </Text>
-                                <XStack alignItems="center" space="$2">
-                                  <Text fontSize="$1" color="$orange10">
-                                    {batch.quantity} units
-                                  </Text>
-                                  <Button
-                                    size="$1"
-                                    backgroundColor="$red3"
-                                    onPress={() => handleRemoveBatch(batch.batchId)}
-                                  >
-                                    <Text fontSize="$1" color="$red11">Remove</Text>
-                                  </Button>
-                                </XStack>
-                              </XStack>
-                            ))}
-                          </YStack>
-                        )}
-                        
-                        {/* Allocate Batch Button */}
-                        {item.itemSaleStatus === 'PENDING' && (
-                          <XStack space="$2">
-                            <Button
-                              flex={1}
-                              size="$2"
-                              backgroundColor="$blue3"
-                              borderColor="$blue6"
-                              onPress={() => handleOpenBatchModal(item)}
-                            >
-                              <Text color="$blue11" fontSize="$2">
-                                {selectedBatchesForItem.length > 0 ? 'Add More Batches' : 'Allocate Batches'}
+                    </YStack>
+                  </XStack>
+
+                  {/* Item Status */}
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <StatusPill
+                      status={item.itemSaleStatus || 'PENDING'}
+                      label={getItemStatusText(item.itemSaleStatus || 'PENDING')}
+                    />
+                    <Text fontWeight="700" color={C.text}>
+                      {formatMoney(item.totalPrice)}
+                    </Text>
+                  </XStack>
+
+                  {/* Batch Allocation Status */}
+                  <YStack gap={8} borderTopWidth={1} borderTopColor={C.border} paddingTop={10}>
+                    <XStack justifyContent="space-between" alignItems="center">
+                      <Text fontSize={13} color={C.label} fontWeight="600">
+                        Batch Allocation
+                      </Text>
+                      <XStack alignItems="center" gap={4}>
+                        {isFullyAllocated ? (
+                          <Ionicons name="checkmark-circle" size={16} color={C.success} />
+                        ) : null}
+                        <Text
+                          fontSize={13}
+                          fontWeight="600"
+                          color={isFullyAllocated ? C.success : C.label}
+                        >
+                          {totalSelected}/{item.quantity} units allocated
+                        </Text>
+                      </XStack>
+                    </XStack>
+
+                    {/* Selected Batches */}
+                    {selectedBatchesForItem.length > 0 ? (
+                      <YStack gap={6}>
+                        {selectedBatchesForItem.map((batch, idx) => (
+                          <XStack
+                            key={idx}
+                            justifyContent="space-between"
+                            alignItems="center"
+                            backgroundColor={C.subtle}
+                            borderWidth={1}
+                            borderColor={C.border}
+                            borderRadius={8}
+                            paddingHorizontal={10}
+                            paddingVertical={6}
+                          >
+                            <XStack alignItems="center" gap={6} flex={1}>
+                              <Ionicons name="cube-outline" size={14} color={C.muted} />
+                              <Text fontSize={12} fontWeight="600" color={C.text}>
+                                Batch {batch.batchId.slice(-6)}
                               </Text>
-                            </Button>
-                            {selectedBatchesForItem.length > 0 && (
+                            </XStack>
+                            <XStack alignItems="center" gap={8}>
+                              <Text fontSize={12} color={C.muted}>
+                                {batch.quantity} units
+                              </Text>
                               <Button
                                 size="$2"
-                                backgroundColor="$red3"
-                                borderColor="$red6"
-                                onPress={() => handleClearItemBatches(item.id)}
+                                {...dangerBtn}
+                                onPress={() => handleRemoveBatch(batch.batchId)}
                               >
-                                <Text color="$red11" fontSize="$2">Clear</Text>
+                                <Text fontSize={12} fontWeight="600" color={C.danger}>Remove</Text>
                               </Button>
-                            )}
+                            </XStack>
                           </XStack>
-                        )}
+                        ))}
                       </YStack>
-                    </YStack>
-                  </Card>
-                );
-              })}
-            </YStack>
-          </Card>
+                    ) : null}
+
+                    {/* Allocate Batch Button */}
+                    {item.itemSaleStatus === 'PENDING' ? (
+                      <XStack gap={8}>
+                        <Button
+                          flex={1}
+                          size="$3"
+                          {...secondaryBtn}
+                          onPress={() => handleOpenBatchModal(item)}
+                          icon={<Ionicons name="layers-outline" size={16} color={C.accent} />}
+                        >
+                          <Text color={C.text} fontWeight="600" fontSize={13}>
+                            {selectedBatchesForItem.length > 0 ? 'Add More Batches' : 'Allocate Batches'}
+                          </Text>
+                        </Button>
+                        {selectedBatchesForItem.length > 0 ? (
+                          <Button
+                            size="$3"
+                            {...dangerBtn}
+                            onPress={() => handleClearItemBatches(item.id)}
+                          >
+                            <Text color={C.danger} fontWeight="600" fontSize={13}>Clear</Text>
+                          </Button>
+                        ) : null}
+                      </XStack>
+                    ) : null}
+                  </YStack>
+                </YStack>
+              );
+            })}
+          </YStack>
 
           {/* Totals */}
-          <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$4" borderRadius="$4">
-            <YStack space="$2">
-              <XStack justifyContent="space-between">
-                <Text color="$orange11">Subtotal:</Text>
-                <Text color="$orange12">{formatMoney(sell.subTotal)}</Text>
-              </XStack>
-              <XStack justifyContent="space-between">
-                <Text color="$orange11">Discount:</Text>
-                <Text color="$red10">-{formatMoney(sell.discount)}</Text>
-              </XStack>
-              <XStack justifyContent="space-between">
-                <Text color="$orange11">VAT:</Text>
-                <Text color="$orange12">{formatMoney(sell.vat)}</Text>
-              </XStack>
-              <XStack justifyContent="space-between" borderTopWidth={1} borderTopColor="$orange4" paddingTop="$2">
-                <Text fontWeight="700" color="$orange12" fontSize="$5">Grand Total:</Text>
-                <Text fontWeight="700" color="$orange10" fontSize="$5">
-                  {formatMoney(sell.grandTotal)}
-                </Text>
-              </XStack>
-              {sell.NetTotal != null && (
-                <XStack justifyContent="space-between">
-                  <Text color="$orange11">Net Total:</Text>
-                  <Text color="$orange12">{formatMoney(sell.NetTotal)}</Text>
-                </XStack>
-              )}
-            </YStack>
-          </Card>
+          <SectionCard gap={8}>
+            <InfoRow label="Subtotal">
+              <Text color={C.text}>{formatMoney(sell.subTotal)}</Text>
+            </InfoRow>
+            <InfoRow label="Discount">
+              <Text color={C.danger}>-{formatMoney(sell.discount)}</Text>
+            </InfoRow>
+            <InfoRow label="VAT">
+              <Text color={C.text}>{formatMoney(sell.vat)}</Text>
+            </InfoRow>
+            <XStack
+              justifyContent="space-between"
+              alignItems="center"
+              borderTopWidth={1}
+              borderTopColor={C.border}
+              paddingTop={10}
+              marginTop={2}
+            >
+              <Text fontWeight="700" color={C.text} fontSize={16}>Grand Total</Text>
+              <Text fontWeight="800" color={C.accent} fontSize={18}>
+                {formatMoney(sell.grandTotal)}
+              </Text>
+            </XStack>
+            {sell.NetTotal != null ? (
+              <InfoRow label="Net Total">
+                <Text color={C.text}>{formatMoney(sell.NetTotal)}</Text>
+              </InfoRow>
+            ) : null}
+          </SectionCard>
 
           {/* Delivery Action */}
-       {(sell.saleStatus === 'APPROVED' || sell.saleStatus === 'PARTIALLY_DELIVERED') && 
- sell.items?.some(item => item.itemSaleStatus === 'PENDING') && (
-  <Card backgroundColor="$orange2" borderColor="$orange5" borderWidth={1} padding="$4" borderRadius="$4">
-    <YStack space="$3" alignItems="center">
-      <H4 color="$orange12">
-        {sell.saleStatus === 'PARTIALLY_DELIVERED' ? 'Continue Delivery' : 'Ready for Delivery'}
-      </H4>
-      <Text color="$orange11" textAlign="center">
-        {sell.saleStatus === 'PARTIALLY_DELIVERED'
-          ? 'Some items are still pending. Allocate remaining batches and submit for delivery.'
-          : 'Allocate batches for all items, then submit for delivery.'}
-      </Text>
-      <Button
-        size="$4"
-        backgroundColor="$orange9"
-        borderColor="$orange9"
-        borderWidth={1}
-        borderRadius="$4"
-        pressStyle={{ backgroundColor: "$orange10" }}
-        onPress={handleSubmitDelivery}
-        disabled={deliveryProcessing}
-        opacity={deliveryProcessing ? 0.7 : 1}
-      >
-        {deliveryProcessing ? (
-          <Spinner size="small" color="white" />
-        ) : (
-          <Text color="white" fontWeight="700" fontSize="$4">
-            {sell.saleStatus === 'PARTIALLY_DELIVERED' ? 'Continue Delivery' : 'Submit Delivery'}
-          </Text>
-        )}
-      </Button>
-    </YStack>
-  </Card>
-)}
+          {(sell.saleStatus === 'APPROVED' || sell.saleStatus === 'PARTIALLY_DELIVERED') &&
+          sell.items?.some(item => item.itemSaleStatus === 'PENDING') ? (
+            <SectionCard gap={12}>
+              <XStack alignItems="center" gap={10}>
+                <YStack
+                  width={36}
+                  height={36}
+                  borderRadius={999}
+                  backgroundColor={C.accentTint}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Ionicons name="cube-outline" size={18} color={C.accent} />
+                </YStack>
+                <YStack flex={1}>
+                  <Text color={C.text} fontSize={16} fontWeight="700">
+                    {sell.saleStatus === 'PARTIALLY_DELIVERED' ? 'Continue Delivery' : 'Ready for Delivery'}
+                  </Text>
+                  <Text color={C.muted} fontSize={13}>
+                    {sell.saleStatus === 'PARTIALLY_DELIVERED'
+                      ? 'Some items are still pending. Allocate remaining batches and submit for delivery.'
+                      : 'Allocate batches for all items, then submit for delivery.'}
+                  </Text>
+                </YStack>
+              </XStack>
+              <Button
+                size="$4"
+                {...primaryBtn}
+                onPress={handleSubmitDelivery}
+                disabled={deliveryProcessing}
+                opacity={deliveryProcessing ? 0.7 : 1}
+              >
+                {deliveryProcessing ? (
+                  <Spinner size="small" color="white" />
+                ) : (
+                  <Text color="white" fontWeight="700" fontSize={15}>
+                    {sell.saleStatus === 'PARTIALLY_DELIVERED' ? 'Continue Delivery' : 'Submit Delivery'}
+                  </Text>
+                )}
+              </Button>
+            </SectionCard>
+          ) : null}
 
           {/* Action Buttons */}
-          <XStack space="$3">
+          <XStack gap={12} marginBottom={insets.bottom + 8}>
             <Button
               flex={1}
-              backgroundColor="$orange3"
-              borderColor="$orange6"
-              borderWidth={1}
-              borderRadius="$4"
+              {...secondaryBtn}
               onPress={handleGoBack}
             >
-              <Text color="$orange11" fontWeight="600">Back to List</Text>
+              <Text color={C.text} fontWeight="600">Back to List</Text>
             </Button>
-            
+
             <Button
               flex={1}
-              backgroundColor="$orange9"
-              borderColor="$orange10"
-              borderWidth={1}
-              borderRadius="$4"
+              {...primaryBtn}
               onPress={handleRefresh}
               disabled={refreshing}
+              icon={refreshing ? undefined : <Ionicons name="refresh" size={16} color="white" />}
             >
               {refreshing ? (
                 <Spinner size="small" color="white" />
               ) : (
-                <Text color="white" fontWeight="600">Refresh</Text>
+                <Text color="white" fontWeight="700">Refresh</Text>
               )}
             </Button>
           </XStack>
@@ -934,243 +998,299 @@ export default function SellDetailPage() {
             style={{ flex: 1 }}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            <YStack 
-              flex={1} 
-              backgroundColor="rgba(0,0,0,0.5)" 
+            <YStack
+              flex={1}
+              backgroundColor="rgba(0,0,0,0.4)"
               justifyContent="flex-end"
             >
               <TouchableWithoutFeedback>
-                <YStack 
-                  backgroundColor="$orange1" 
-                  borderTopLeftRadius="$4" 
-                  borderTopRightRadius="$4" 
-                  padding="$4"
+                <YStack
+                  backgroundColor="white"
+                  borderTopLeftRadius={20}
+                  borderTopRightRadius={20}
+                  padding={16}
                   maxHeight="85%"
-                  borderWidth={1}
-                  borderColor="$orange4"
                 >
-                  <ScrollView 
+                  <ScrollView
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                   >
-                    <YStack space="$4">
+                    <YStack gap={12}>
                       <XStack justifyContent="space-between" alignItems="center">
-                        <H4 color="$orange12">Available Batches</H4>
+                        <Text color={C.text} fontSize={20} fontWeight="700">Available Batches</Text>
                         <Button
-                          size="$2"
+                          size="$3"
                           circular
-                          backgroundColor="$orange3"
+                          {...secondaryBtn}
                           onPress={() => {
                             Keyboard.dismiss();
                             setShowBatchModal(false);
                           }}
-                        >
-                          <Text color="$orange11">✕</Text>
-                        </Button>
+                          icon={<Ionicons name="close" size={18} color={C.text} />}
+                        />
                       </XStack>
-                      
+
                       {/* Product Information with Image */}
-                      {activeItem && (
-                        <Card backgroundColor="$orange2" borderColor="$orange5" borderWidth={1} padding="$3" borderRadius="$3">
-                          <XStack space="$3" alignItems="center">
-                            {getProductImageUrl && (
-                              <Image
-                                source={{ uri: getProductImageUrl }}
-                                width={60}
-                                height={60}
-                                borderRadius="$2"
-                                resizeMode="cover"
-                                backgroundColor="$orange2"
-                              />
-                            )}
-                            <YStack flex={1}>
-                              <Text fontWeight="700" color="$orange12" numberOfLines={2}>
-                                {getProductName(activeItem)}
-                                {getSubProductLabel(activeItem) ? ` — ${getSubProductLabel(activeItem)}` : ''}
+                      {activeItem ? (
+                        <XStack
+                          gap={12}
+                          alignItems="center"
+                          borderWidth={1}
+                          borderColor={C.border}
+                          borderRadius={12}
+                          padding={12}
+                          backgroundColor={C.subtle}
+                        >
+                          {getProductImageUrl ? (
+                            <Image
+                              source={{ uri: getProductImageUrl }}
+                              width={56}
+                              height={56}
+                              borderRadius={8}
+                              resizeMode="cover"
+                              backgroundColor="white"
+                            />
+                          ) : null}
+                          <YStack flex={1} gap={2}>
+                            <Text fontWeight="700" color={C.text} numberOfLines={2}>
+                              {getProductName(activeItem)}
+                              {getSubProductLabel(activeItem) ? ` — ${getSubProductLabel(activeItem)}` : ''}
+                            </Text>
+                            {activeItem.shop?.name ? (
+                              <Text fontSize={12} color={C.muted} numberOfLines={1}>
+                                Shop: {activeItem.shop.name}
                               </Text>
-                              {activeItem.shop?.name ? (
-                                <Text fontSize="$2" color="$orange11" numberOfLines={1}>
-                                  Shop: {activeItem.shop.name}
-                                </Text>
-                              ) : null}
-                              <XStack justifyContent="space-between" marginTop="$1">
-                                <Text fontSize="$2" color="$orange11">
-                                  Needed: {activeItem.quantity} units
-                                </Text>
-                                <Text fontSize="$2" color="$orange10" fontWeight="600">
-                                  Remaining: {getRemainingQuantityNeeded} units
-                                </Text>
-                              </XStack>
-                            </YStack>
-                          </XStack>
-                        </Card>
-                      )}
-                      
+                            ) : null}
+                            <XStack justifyContent="space-between" marginTop={2}>
+                              <Text fontSize={12} color={C.label}>
+                                Needed: {activeItem.quantity} units
+                              </Text>
+                              <Text fontSize={12} color={C.accent} fontWeight="700">
+                                Remaining: {getRemainingQuantityNeeded} units
+                              </Text>
+                            </XStack>
+                          </YStack>
+                        </XStack>
+                      ) : null}
+
                       {batchesLoading ? (
                         <YStack alignItems="center" padding="$8">
-                          <Spinner size="large" color="$orange9" />
-                          <Text marginTop="$4" color="$orange11">
+                          <Spinner size="large" color={C.accent} />
+                          <Text marginTop="$4" color={C.muted}>
                             Loading available batches...
                           </Text>
                         </YStack>
                       ) : batchesError ? (
-                        <Card backgroundColor="$red2" padding="$4" borderRadius="$4">
-                          <Text color="$red11" textAlign="center">
+                        <XStack
+                          alignItems="center"
+                          gap={8}
+                          borderWidth={1}
+                          borderColor={C.border}
+                          borderRadius={12}
+                          padding={12}
+                        >
+                          <Ionicons name="alert-circle-outline" size={18} color={C.danger} />
+                          <Text color={C.text} flex={1}>
                             Error loading batches: {batchesError.message}
                           </Text>
-                        </Card>
+                        </XStack>
                       ) : availableBatches.length === 0 ? (
-                        <Card backgroundColor="$orange2" padding="$4" borderRadius="$4">
-                          <Text color="$orange11" textAlign="center">
+                        <YStack
+                          alignItems="center"
+                          gap={8}
+                          borderWidth={1}
+                          borderColor={C.border}
+                          borderRadius={12}
+                          padding={16}
+                        >
+                          <Ionicons name="cube-outline" size={22} color={C.muted} />
+                          <Text color={C.muted} textAlign="center">
                             No batches available for this product in the selected shop.
                           </Text>
-                        </Card>
+                        </YStack>
                       ) : (
-                        <YStack space="$3">
+                        <YStack gap={10}>
                           {availableBatches.map((batch) => {
-  const selected = activeItem && getSelectedBatchesForItem(activeItem.id)
-    .some(b => b.batchId === batch.id);
-  const availableQuantity = getAvailableQuantityForBatch(batch);
-  const enteredQuantity = parseInt(batchQuantities[batch.id] || '0');
-  const isQuantityValid = isValidQuantity(batch.id, enteredQuantity);
-  const remainingNeeded = getRemainingQuantityNeeded;
-  
-  // Check if entered quantity exceeds remaining needed
-  const exceedsRemaining = enteredQuantity > remainingNeeded;
-  
-  return (
-    <Card key={batch.id} backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} padding="$3" borderRadius="$3">
-      <YStack space="$3">
-        <XStack justifyContent="space-between" alignItems="center">
-          <YStack flex={1}>
-            <Text fontWeight="700" color="$orange12">
-              Batch #{batch.batchNumber || batch.id.slice(-6)}
-            </Text>
-            <Text fontSize="$2" color="$orange10">
-              Expiry: {batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString() : 'N/A'}
-            </Text>
-          </YStack>
-          <Text fontWeight="600" color={availableQuantity > 0 ? "$green10" : "$red10"}>
-            {availableQuantity} available
-          </Text>
-        </XStack>
-        
-        {selected ? (
-          <Card backgroundColor="$green1" padding="$2" borderRadius="$2">
-            <Text color="$green11" fontSize="$2" textAlign="center" fontWeight="600">
-              ✓ Selected for allocation
-            </Text>
-          </Card>
-        ) : availableQuantity > 0 ? (
-          <YStack space="$2">
-            {/* Manual Quantity Input with red styling when exceeding */}
-            <YStack space="$1">
-              <Input
-                placeholder={`Enter quantity (max: ${availableQuantity})`}
-                value={batchQuantities[batch.id] || ''}
-                onChangeText={(value) => handleBatchQuantityChange(batch.id, value)}
-                keyboardType="numeric"
-                borderColor={
-                  exceedsRemaining ? "$red8" : 
-                  (isQuantityValid || enteredQuantity === 0) ? "$orange5" : "$red5"
-                }
-                backgroundColor={exceedsRemaining ? "$red1" : "$orange1"}
-                color={exceedsRemaining ? "$red12" : "$orange12"}
-                borderWidth={exceedsRemaining ? 2 : 1}
-                onSubmitEditing={Keyboard.dismiss}
-                onBlur={() => {
-                  // Automatically allocate when user finishes typing
-                  if (enteredQuantity > 0 && isQuantityValid && !exceedsRemaining) {
-                    handleSelectBatch(batch);
-                  } else if (exceedsRemaining) {
-                    Alert.alert(
-                      "Quantity Exceeds Need",
-                      `Only ${remainingNeeded} units remaining needed. ` +
-                      `You entered ${enteredQuantity} units.`
-                    );
-                  }
-                }}
-              />
-              
-              {/* Warning message for exceeding */}
-              {exceedsRemaining && (
-                <Text fontSize="$1" color="$red10" fontWeight="600">
-                  ⚠️ Exceeds remaining needed by {enteredQuantity - remainingNeeded} units
-                </Text>
-              )}
-              
-              {/* Allocate button with conditional styling */}
-              <Button
-                backgroundColor={
-                  exceedsRemaining ? "$red8" : 
-                  enteredQuantity > 0 && isQuantityValid ? "$blue8" : "$gray8"
-                }
-                color="white"
-                onPress={() => {
-                  if (exceedsRemaining) {
-                    Alert.alert(
-                      "Quantity Exceeds Need",
-                      `Only ${remainingNeeded} units remaining needed. ` +
-                      `Please reduce quantity to ${remainingNeeded} or less.`
-                    );
-                  } else if (enteredQuantity > 0 && isQuantityValid) {
-                    handleSelectBatch(batch);
-                  } else if (enteredQuantity > 0) {
-                    Alert.alert(
-                      "Invalid Quantity",
-                      `Maximum available quantity is ${availableQuantity} units.`
-                    );
-                  } else {
-                    Alert.alert("Error", "Please enter a quantity greater than 0");
-                  }
-                }}
-                disabled={exceedsRemaining}
-                opacity={exceedsRemaining ? 0.7 : 1}
-              >
-                {exceedsRemaining ? "Exceeds Allocation" : "Allocate"}
-              </Button>
-            </YStack>
-            
-           
-            
-            {/* Quick Action Button for remaining needed */}
-            {availableQuantity >= remainingNeeded && remainingNeeded > 0 && (
-              <Button
-                backgroundColor="$purple3"
-                borderColor="$purple6"
-                onPress={() => handleAssignAllRemaining(batch)}
-              >
-                <Text color="$purple11" fontWeight="600">
-                  Assign All Remaining Needed 
-                </Text>
-              </Button>
-            )}
-          </YStack>
-        ) : (
-          <Card backgroundColor="$red1" padding="$2" borderRadius="$2">
-            <Text color="$red11" fontSize="$2" textAlign="center">
-              No stock available
-            </Text>
-          </Card>
-        )}
-      </YStack>
-    </Card>
-  );
-})}
+                            const selected = activeItem && getSelectedBatchesForItem(activeItem.id)
+                              .some(b => b.batchId === batch.id);
+                            const availableQuantity = getAvailableQuantityForBatch(batch);
+                            const enteredQuantity = parseInt(batchQuantities[batch.id] || '0');
+                            const isQuantityValid = isValidQuantity(batch.id, enteredQuantity);
+                            const remainingNeeded = getRemainingQuantityNeeded;
+
+                            // Check if entered quantity exceeds remaining needed
+                            const exceedsRemaining = enteredQuantity > remainingNeeded;
+                            const canAllocate = enteredQuantity > 0 && isQuantityValid;
+                            const inputInvalid = exceedsRemaining || !(isQuantityValid || enteredQuantity === 0);
+
+                            return (
+                              <YStack
+                                key={batch.id}
+                                backgroundColor="white"
+                                borderWidth={1}
+                                borderColor={selected ? C.accent : C.border}
+                                borderRadius={12}
+                                padding={12}
+                                gap={10}
+                              >
+                                <XStack justifyContent="space-between" alignItems="center" gap={8}>
+                                  <YStack flex={1}>
+                                    <Text fontWeight="700" color={C.text}>
+                                      Batch #{batch.batchNumber || batch.id.slice(-6)}
+                                    </Text>
+                                    <XStack alignItems="center" gap={4}>
+                                      <Ionicons name="calendar-outline" size={12} color={C.muted} />
+                                      <Text fontSize={12} color={C.muted}>
+                                        Expiry: {batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString() : 'N/A'}
+                                      </Text>
+                                    </XStack>
+                                  </YStack>
+                                  <YStack
+                                    backgroundColor={availableQuantity > 0 ? '#DCFCE7' : '#FEE2E2'}
+                                    paddingHorizontal={10}
+                                    paddingVertical={3}
+                                    borderRadius={999}
+                                  >
+                                    <Text
+                                      fontSize={12}
+                                      fontWeight="700"
+                                      color={availableQuantity > 0 ? '#166534' : '#991B1B'}
+                                    >
+                                      {availableQuantity} available
+                                    </Text>
+                                  </YStack>
+                                </XStack>
+
+                                {selected ? (
+                                  <XStack
+                                    alignItems="center"
+                                    justifyContent="center"
+                                    gap={6}
+                                    backgroundColor={C.accentTint}
+                                    padding={8}
+                                    borderRadius={10}
+                                  >
+                                    <Ionicons name="checkmark-circle" size={16} color={C.accent} />
+                                    <Text color={C.text} fontSize={13} fontWeight="600">
+                                      Selected for allocation
+                                    </Text>
+                                  </XStack>
+                                ) : availableQuantity > 0 ? (
+                                  <YStack gap={8}>
+                                    {/* Manual Quantity Input with red styling when exceeding */}
+                                    <YStack gap={6}>
+                                      <Input
+                                        placeholder={`Enter quantity (max: ${availableQuantity})`}
+                                        placeholderTextColor={C.placeholder}
+                                        value={batchQuantities[batch.id] || ''}
+                                        onChangeText={(value) => handleBatchQuantityChange(batch.id, value)}
+                                        keyboardType="numeric"
+                                        backgroundColor="white"
+                                        borderRadius={10}
+                                        borderWidth={1}
+                                        borderColor={inputInvalid ? C.danger : C.border}
+                                        focusStyle={{ borderColor: inputInvalid ? C.danger : C.accent }}
+                                        color={C.text}
+                                        onSubmitEditing={Keyboard.dismiss}
+                                        onBlur={() => {
+                                          // Automatically allocate when user finishes typing
+                                          if (enteredQuantity > 0 && isQuantityValid && !exceedsRemaining) {
+                                            handleSelectBatch(batch);
+                                          } else if (exceedsRemaining) {
+                                            Alert.alert(
+                                              "Quantity Exceeds Need",
+                                              `Only ${remainingNeeded} units remaining needed. ` +
+                                              `You entered ${enteredQuantity} units.`
+                                            );
+                                          }
+                                        }}
+                                      />
+
+                                      {/* Warning message for exceeding */}
+                                      {exceedsRemaining ? (
+                                        <XStack alignItems="center" gap={6}>
+                                          <Ionicons name="alert-circle-outline" size={14} color={C.danger} />
+                                          <Text fontSize={12} color={C.danger} fontWeight="600">
+                                            Exceeds remaining needed by {enteredQuantity - remainingNeeded} units
+                                          </Text>
+                                        </XStack>
+                                      ) : null}
+
+                                      {/* Allocate button with conditional styling */}
+                                      <Button
+                                        {...(exceedsRemaining ? dangerBtn : canAllocate ? primaryBtn : secondaryBtn)}
+                                        onPress={() => {
+                                          if (exceedsRemaining) {
+                                            Alert.alert(
+                                              "Quantity Exceeds Need",
+                                              `Only ${remainingNeeded} units remaining needed. ` +
+                                              `Please reduce quantity to ${remainingNeeded} or less.`
+                                            );
+                                          } else if (enteredQuantity > 0 && isQuantityValid) {
+                                            handleSelectBatch(batch);
+                                          } else if (enteredQuantity > 0) {
+                                            Alert.alert(
+                                              "Invalid Quantity",
+                                              `Maximum available quantity is ${availableQuantity} units.`
+                                            );
+                                          } else {
+                                            Alert.alert("Error", "Please enter a quantity greater than 0");
+                                          }
+                                        }}
+                                        disabled={exceedsRemaining}
+                                        opacity={exceedsRemaining ? 0.7 : 1}
+                                      >
+                                        <Text
+                                          fontWeight="700"
+                                          color={exceedsRemaining ? C.danger : canAllocate ? 'white' : C.text}
+                                        >
+                                          {exceedsRemaining ? "Exceeds Allocation" : "Allocate"}
+                                        </Text>
+                                      </Button>
+                                    </YStack>
+
+                                    {/* Quick Action Button for remaining needed */}
+                                    {availableQuantity >= remainingNeeded && remainingNeeded > 0 ? (
+                                      <Button
+                                        {...secondaryBtn}
+                                        onPress={() => handleAssignAllRemaining(batch)}
+                                        icon={<Ionicons name="flash-outline" size={16} color={C.accent} />}
+                                      >
+                                        <Text color={C.text} fontWeight="600">
+                                          Assign All Remaining Needed
+                                        </Text>
+                                      </Button>
+                                    ) : null}
+                                  </YStack>
+                                ) : (
+                                  <XStack
+                                    alignItems="center"
+                                    justifyContent="center"
+                                    gap={6}
+                                    backgroundColor={C.subtle}
+                                    padding={8}
+                                    borderRadius={10}
+                                  >
+                                    <Ionicons name="close-circle-outline" size={16} color={C.danger} />
+                                    <Text color={C.label} fontSize={13}>
+                                      No stock available
+                                    </Text>
+                                  </XStack>
+                                )}
+                              </YStack>
+                            );
+                          })}
                         </YStack>
                       )}
-                      
+
                       <Button
-                        backgroundColor="$orange3"
-                        borderColor="$orange6"
-                        borderWidth={1}
-                        borderRadius="$4"
+                        {...secondaryBtn}
                         onPress={() => {
                           Keyboard.dismiss();
                           setShowBatchModal(false);
                         }}
                       >
-                        <Text color="$orange11" fontWeight="600">Close</Text>
+                        <Text color={C.text} fontWeight="600">Close</Text>
                       </Button>
                     </YStack>
                   </ScrollView>
@@ -1189,61 +1309,79 @@ export default function SellDetailPage() {
         onRequestClose={closeConfirmModal}
       >
         <TouchableWithoutFeedback onPress={closeConfirmModal}>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', padding: 16 }}>
             <TouchableWithoutFeedback>
-              <Card backgroundColor="$orange1" borderColor="$orange4" borderWidth={1} borderRadius="$4" padding="$4" width="85%" maxWidth={400}>
-                <YStack space="$3">
-                  <H4 color="$orange12">Confirm Delivery</H4>
-                  <Text color="$orange11">
+              <YStack
+                backgroundColor="white"
+                borderColor={C.border}
+                borderWidth={1}
+                borderRadius={16}
+                padding={20}
+                width="100%"
+                maxWidth={400}
+                gap={12}
+              >
+                <YStack alignItems="center" gap={8}>
+                  <YStack
+                    width={48}
+                    height={48}
+                    borderRadius={999}
+                    backgroundColor={C.accentTint}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    <Ionicons name="cube-outline" size={24} color={C.accent} />
+                  </YStack>
+                  <Text color={C.text} fontSize={18} fontWeight="700" textAlign="center">
+                    Confirm Delivery
+                  </Text>
+                  <Text color={C.muted} fontSize={14} textAlign="center">
                     Are you sure you want to submit this delivery? This action cannot be undone.
                   </Text>
-                  {/* Items included in this delivery */}
-                  <YStack space="$1">
-                    {sell.items
-                      ?.filter(item => getTotalSelectedQuantity(item.id) > 0)
-                      .map(item => {
-                        const subLabel = getSubProductLabel(item);
-                        return (
-                          <XStack key={item.id} justifyContent="space-between" space="$2">
-                            <Text flex={1} fontSize="$2" color="$orange12" numberOfLines={2}>
-                              {getProductName(item)}
-                              {subLabel ? ` — ${subLabel}` : ''}
-                            </Text>
-                            <Text fontSize="$2" fontWeight="600" color="$orange10">
-                              {getTotalSelectedQuantity(item.id)}/{item.quantity}
-                            </Text>
-                          </XStack>
-                        );
-                      })}
-                  </YStack>
-                  <XStack space="$3" marginTop="$4">
-                    <Button
-                      flex={1}
-                      backgroundColor="$orange3"
-                      borderColor="$orange6"
-                      onPress={closeConfirmModal}
-                      disabled={deliveryProcessing}
-                    >
-                      <Text color="$orange11">Cancel</Text>
-                    </Button>
-                    <Button
-                      flex={1}
-                      backgroundColor="$orange9"
-                      borderColor="$orange9"
-                      pressStyle={{ backgroundColor: "$orange10" }}
-                      onPress={confirmDelivery}
-                      disabled={deliveryProcessing}
-                      opacity={deliveryProcessing ? 0.7 : 1}
-                    >
-                      {deliveryProcessing ? (
-                        <Spinner size="small" color="white" />
-                      ) : (
-                        <Text color="white" fontWeight="600">Confirm</Text>
-                      )}
-                    </Button>
-                  </XStack>
                 </YStack>
-              </Card>
+                {/* Items included in this delivery */}
+                <YStack gap={6} borderWidth={1} borderColor={C.border} borderRadius={12} padding={12}>
+                  {sell.items
+                    ?.filter(item => getTotalSelectedQuantity(item.id) > 0)
+                    .map(item => {
+                      const subLabel = getSubProductLabel(item);
+                      return (
+                        <XStack key={item.id} justifyContent="space-between" gap={8}>
+                          <Text flex={1} fontSize={13} color={C.text} numberOfLines={2}>
+                            {getProductName(item)}
+                            {subLabel ? ` — ${subLabel}` : ''}
+                          </Text>
+                          <Text fontSize={13} fontWeight="700" color={C.accent}>
+                            {getTotalSelectedQuantity(item.id)}/{item.quantity}
+                          </Text>
+                        </XStack>
+                      );
+                    })}
+                </YStack>
+                <XStack gap={12} marginTop={4}>
+                  <Button
+                    flex={1}
+                    {...secondaryBtn}
+                    onPress={closeConfirmModal}
+                    disabled={deliveryProcessing}
+                  >
+                    <Text color={C.text} fontWeight="600">Cancel</Text>
+                  </Button>
+                  <Button
+                    flex={1}
+                    {...primaryBtn}
+                    onPress={confirmDelivery}
+                    disabled={deliveryProcessing}
+                    opacity={deliveryProcessing ? 0.7 : 1}
+                  >
+                    {deliveryProcessing ? (
+                      <Spinner size="small" color="white" />
+                    ) : (
+                      <Text color="white" fontWeight="700">Confirm</Text>
+                    )}
+                  </Button>
+                </XStack>
+              </YStack>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
@@ -1257,27 +1395,47 @@ export default function SellDetailPage() {
         onRequestClose={() => setShowSuccessModal(false)}
       >
         <TouchableWithoutFeedback onPress={() => setShowSuccessModal(false)}>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', padding: 16 }}>
             <TouchableWithoutFeedback>
-              <Card backgroundColor="$green1" borderColor="$green4" borderWidth={1} padding="$4" width="85%" maxWidth={400}>
-                <YStack space="$3" alignItems="center">
-                  <H4 color="$green12">Delivery Successful! 🎉</H4>
-                  <Text color="$green11" textAlign="center">
-                    The delivery has been processed successfully.
-                  </Text>
-                  <Button
-                    backgroundColor="$green9"
-                    borderColor="$green10"
-                    onPress={() => {
-                      setShowSuccessModal(false);
-                      setDeliverySuccess(false);
-                    }}
-                    marginTop="$4"
-                  >
-                    <Text color="white" fontWeight="600">Continue</Text>
-                  </Button>
+              <YStack
+                backgroundColor="white"
+                borderColor={C.border}
+                borderWidth={1}
+                borderRadius={16}
+                padding={20}
+                width="100%"
+                maxWidth={400}
+                gap={12}
+                alignItems="center"
+              >
+                <YStack
+                  width={56}
+                  height={56}
+                  borderRadius={999}
+                  backgroundColor="#DCFCE7"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Ionicons name="checkmark-circle" size={30} color={C.success} />
                 </YStack>
-              </Card>
+                <Text color={C.text} fontSize={18} fontWeight="700" textAlign="center">
+                  Delivery Successful
+                </Text>
+                <Text color={C.muted} fontSize={14} textAlign="center">
+                  The delivery has been processed successfully.
+                </Text>
+                <Button
+                  width="100%"
+                  {...primaryBtn}
+                  onPress={() => {
+                    setShowSuccessModal(false);
+                    setDeliverySuccess(false);
+                  }}
+                  marginTop={4}
+                >
+                  <Text color="white" fontWeight="700">Continue</Text>
+                </Button>
+              </YStack>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>

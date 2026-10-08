@@ -1,10 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
-import { ScrollView, YStack, H4, Card, Input, Fieldset, Label, Button, Text, XStack, Spinner } from 'tamagui';
+import { ScrollView, YStack, Input, Button, Text, XStack, Spinner } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
 import { useAppSelector } from '@/(redux)/hooks';
 import { changePasswordAction, clearError } from '@/(redux)/authSlice';
 import type { AppDispatch } from '@/(redux)/store';
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+// Labelled input with a leading icon; orange border when focused, red on error
+const FormField = ({
+  label,
+  icon,
+  error,
+  editable = true,
+  ...inputProps
+}: {
+  label: string;
+  icon: IconName;
+  error?: string;
+  editable?: boolean;
+} & React.ComponentProps<typeof Input>) => {
+  const [focused, setFocused] = useState(false);
+  return (
+    <YStack gap={6}>
+      <Text fontSize={14} fontWeight="600" color="#374151">
+        {label}
+      </Text>
+      <XStack
+        alignItems="center"
+        backgroundColor={editable ? '#FFFFFF' : '#F9FAFB'}
+        borderWidth={1}
+        borderColor={error ? '#DC2626' : focused ? '#FF6B00' : '#E5E7EB'}
+        borderRadius={12}
+        paddingLeft={12}
+      >
+        <Ionicons name={icon} size={18} color="#6B7280" />
+        <Input
+          flex={1}
+          {...inputProps}
+          editable={editable}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          backgroundColor="transparent"
+          borderWidth={0}
+          focusStyle={{ borderWidth: 0 }}
+          color="#111827"
+          fontSize={15}
+          paddingHorizontal={10}
+          placeholderTextColor="#9CA3AF"
+        />
+      </XStack>
+      {error ? (
+        <Text fontSize={12} color="#DC2626">
+          {error}
+        </Text>
+      ) : null}
+    </YStack>
+  );
+};
 
 export default function PasswordChange() {
   const dispatch = useDispatch<AppDispatch>();
@@ -120,187 +175,148 @@ export default function PasswordChange() {
     formData.confirmPassword.trim() &&
     formData.newPassword === formData.confirmPassword;
 
+  const requirements = [
+    { ok: !!formData.currentPassword, label: 'Current password entered' },
+    { ok: !!formData.newPassword, label: 'New password entered' },
+    { ok: formData.newPassword === formData.confirmPassword && !!formData.newPassword, label: 'Passwords match' },
+  ];
+
   return (
-    <ScrollView flex={1} backgroundColor="$orange1">
-      <YStack flex={1} padding="$4" space="$4">
-        <YStack space="$1" marginBottom="$2">
-          <H4 color="$orange12" fontWeight="800">
-            Change Password
-          </H4>
-          <YStack width={40} height={3} borderRadius={2} backgroundColor="$orange9" />
-          <Text fontSize="$3" color="$orange11" marginTop="$2">
-            Update your password (any password is allowed for testing)
-          </Text>
-        </YStack>
+    <ScrollView flex={1} backgroundColor="#FFFFFF">
+      <YStack
+        paddingHorizontal={16}
+        paddingTop={16}
+        paddingBottom={12}
+        borderBottomWidth={1}
+        borderBottomColor="#E5E7EB"
+        gap={2}
+      >
+        <Text fontSize={24} fontWeight="700" color="#111827">
+          Change Password
+        </Text>
+        <Text fontSize={14} color="#6B7280">
+          Update your password (any password is allowed for testing)
+        </Text>
+      </YStack>
 
+      <YStack flex={1} padding={16} gap={12}>
         {/* Success Message */}
-        {showSuccess && (
-          <Card backgroundColor="$green2" borderColor="$green6" borderWidth={1} borderRadius="$4" padding="$3" marginBottom="$4">
-            <XStack alignItems="center" space="$2">
-              <Text color="$green11" fontSize="$4">✅</Text>
-              <Text color="$green11" fontWeight="600" fontSize="$3">
-                Password changed successfully!
-              </Text>
-            </XStack>
-          </Card>
-        )}
+        {showSuccess ? (
+          <XStack
+            alignItems="center"
+            gap={8}
+            padding={12}
+            borderRadius={12}
+            backgroundColor="#F0FDF4"
+            borderWidth={1}
+            borderColor="#BBF7D0"
+          >
+            <Ionicons name="checkmark-circle-outline" size={18} color="#166534" />
+            <Text color="#166534" fontWeight="600" fontSize={14}>
+              Password changed successfully!
+            </Text>
+          </XStack>
+        ) : null}
 
-        <Card bordered borderWidth={1} borderColor="$orange4" borderRadius="$5" padding="$4" backgroundColor="$orange1">
-          <YStack space="$4">
-            {/* Current Password */}
-            <Fieldset>
-              <Label htmlFor="currentPassword" color="$orange11" fontSize="$3" fontWeight="600">
-                Current Password
-              </Label>
-              <Input
-                id="currentPassword"
-                secureTextEntry
-                value={formData.currentPassword}
-                onChangeText={(text) => handleInputChange('currentPassword', text)}
-                borderColor={validationErrors.currentPassword ? "$red8" : "$orange4"}
-                focusStyle={{ borderColor: validationErrors.currentPassword ? "$red8" : "$orange9" }}
-                backgroundColor="$orange1"
-                color="$orange12"
-                borderRadius="$4"
-                placeholder="Enter your current password"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {validationErrors.currentPassword ? (
-                <Text color="$red10" fontSize="$2" marginTop="$2">
-                  {validationErrors.currentPassword}
-                </Text>
-              ) : null}
-            </Fieldset>
+        <YStack backgroundColor="#FFFFFF" borderWidth={1} borderColor="#E5E7EB" borderRadius={16} padding={16} gap={14}>
+          <FormField
+            label="Current Password"
+            icon="lock-closed-outline"
+            secureTextEntry
+            value={formData.currentPassword}
+            onChangeText={(text) => handleInputChange('currentPassword', text)}
+            error={validationErrors.currentPassword}
+            placeholder="Enter your current password"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-            {/* New Password */}
-            <Fieldset>
-              <Label htmlFor="newPassword" color="$orange11" fontSize="$3" fontWeight="600">
-                New Password
-              </Label>
-              <Input
-                id="newPassword"
-                secureTextEntry
-                value={formData.newPassword}
-                onChangeText={(text) => handleInputChange('newPassword', text)}
-                borderColor={validationErrors.newPassword ? "$red8" : "$orange4"}
-                focusStyle={{ borderColor: validationErrors.newPassword ? "$red8" : "$orange9" }}
-                backgroundColor="$orange1"
-                color="$orange12"
-                borderRadius="$4"
-                placeholder="Enter any new password (testing)"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {validationErrors.newPassword ? (
-                <Text color="$red10" fontSize="$2" marginTop="$2">
-                  {validationErrors.newPassword}
-                </Text>
-              ) : null}
-            </Fieldset>
+          <FormField
+            label="New Password"
+            icon="key-outline"
+            secureTextEntry
+            value={formData.newPassword}
+            onChangeText={(text) => handleInputChange('newPassword', text)}
+            error={validationErrors.newPassword}
+            placeholder="Enter any new password (testing)"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-            {/* Confirm Password */}
-            <Fieldset>
-              <Label htmlFor="confirmPassword" color="$orange11" fontSize="$3" fontWeight="600">
-                Confirm New Password
-              </Label>
-              <Input
-                id="confirmPassword"
-                secureTextEntry
-                value={formData.confirmPassword}
-                onChangeText={(text) => handleInputChange('confirmPassword', text)}
-                borderColor={validationErrors.confirmPassword ? "$red8" : "$orange4"}
-                focusStyle={{ borderColor: validationErrors.confirmPassword ? "$red8" : "$orange9" }}
-                backgroundColor="$orange1"
-                color="$orange12"
-                borderRadius="$4"
-                placeholder="Confirm your new password"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {validationErrors.confirmPassword ? (
-                <Text color="$red10" fontSize="$2" marginTop="$2">
-                  {validationErrors.confirmPassword}
-                </Text>
-              ) : null}
-            </Fieldset>
+          <FormField
+            label="Confirm New Password"
+            icon="key-outline"
+            secureTextEntry
+            value={formData.confirmPassword}
+            onChangeText={(text) => handleInputChange('confirmPassword', text)}
+            error={validationErrors.confirmPassword}
+            placeholder="Confirm your new password"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-            {/* Simple Requirements */}
-            <Card backgroundColor="$orange2" padding="$3" borderRadius="$4">
-              <Text fontSize="$3" fontWeight="600" color="$orange12" marginBottom="$2">
-                Basic Requirements:
-              </Text>
-              <YStack space="$1">
-                <XStack alignItems="center" space="$2">
-                  <Text color={formData.currentPassword ? "$green9" : "$orange9"} fontSize="$2">
-                    {formData.currentPassword ? "✓" : "○"}
-                  </Text>
-                  <Text color="$orange11" fontSize="$2">Current password entered</Text>
-                </XStack>
-                <XStack alignItems="center" space="$2">
-                  <Text color={formData.newPassword ? "$green9" : "$orange9"} fontSize="$2">
-                    {formData.newPassword ? "✓" : "○"}
-                  </Text>
-                  <Text color="$orange11" fontSize="$2">New password entered</Text>
-                </XStack>
-                <XStack alignItems="center" space="$2">
-                  <Text color={formData.newPassword === formData.confirmPassword && formData.newPassword ? "$green9" : "$orange9"} fontSize="$2">
-                    {formData.newPassword === formData.confirmPassword && formData.newPassword ? "✓" : "○"}
-                  </Text>
-                  <Text color="$orange11" fontSize="$2">Passwords match</Text>
-                </XStack>
-              </YStack>
-            </Card>
-
-            {/* Submit Button */}
-            <Button
-              backgroundColor="$orange9"
-              borderColor="$orange9"
-              borderWidth={1}
-              borderRadius="$4"
-              opacity={isFormValid && !loading ? 1 : 0.5}
-              pressStyle={{ backgroundColor: "$orange10" }}
-              onPress={handleChangePassword}
-              disabled={!isFormValid || loading}
-              height="$5"
-            >
-              {loading ? (
-                <XStack alignItems="center" space="$2">
-                  <Spinner size="small" color="white" />
-                  <Text color="white" fontWeight="600">Changing Password...</Text>
-                </XStack>
-              ) : (
-                <Text color="white" fontWeight="700">Change Password</Text>
-              )}
-            </Button>
-
-            {/* Clear Button */}
-            <Button
-              variant="outlined"
-              borderColor="$orange9"
-              borderWidth={1}
-              backgroundColor="$orange1"
-              borderRadius="$4"
-              onPress={() => {
-                setFormData({
-                  currentPassword: '',
-                  newPassword: '',
-                  confirmPassword: '',
-                });
-                setValidationErrors({
-                  currentPassword: '',
-                  newPassword: '',
-                  confirmPassword: '',
-                });
-              }}
-              disabled={loading}
-            >
-              <Text color="$orange9" fontWeight="700">Clear Form</Text>
-            </Button>
+          {/* Simple Requirements */}
+          <YStack backgroundColor="#F9FAFB" borderRadius={12} padding={12} gap={6}>
+            <Text fontSize={14} fontWeight="600" color="#111827">
+              Basic requirements
+            </Text>
+            {requirements.map((req) => (
+              <XStack key={req.label} alignItems="center" gap={8}>
+                <Ionicons
+                  name={req.ok ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={16}
+                  color={req.ok ? '#16A34A' : '#9CA3AF'}
+                />
+                <Text color="#374151" fontSize={13}>{req.label}</Text>
+              </XStack>
+            ))}
           </YStack>
-        </Card>
 
+          {/* Submit Button */}
+          <Button
+            backgroundColor="#FF6B00"
+            borderWidth={0}
+            borderRadius={12}
+            opacity={isFormValid && !loading ? 1 : 0.6}
+            pressStyle={{ backgroundColor: '#EA580C' }}
+            onPress={handleChangePassword}
+            disabled={!isFormValid || loading}
+            height={50}
+          >
+            {loading ? (
+              <XStack alignItems="center" gap={8}>
+                <Spinner size="small" color="white" />
+                <Text color="white" fontWeight="700">Changing Password...</Text>
+              </XStack>
+            ) : (
+              <Text color="white" fontWeight="700">Change Password</Text>
+            )}
+          </Button>
 
+          {/* Clear Button */}
+          <Button
+            backgroundColor="#FFFFFF"
+            borderWidth={1}
+            borderColor="#E5E7EB"
+            borderRadius={12}
+            pressStyle={{ backgroundColor: '#F9FAFB', borderColor: '#E5E7EB' }}
+            onPress={() => {
+              setFormData({
+                currentPassword: '',
+                newPassword: '',
+                confirmPassword: '',
+              });
+              setValidationErrors({
+                currentPassword: '',
+                newPassword: '',
+                confirmPassword: '',
+              });
+            }}
+            disabled={loading}
+          >
+            <Text color="#111827" fontWeight="600">Clear Form</Text>
+          </Button>
+        </YStack>
       </YStack>
     </ScrollView>
   );

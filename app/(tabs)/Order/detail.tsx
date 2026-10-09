@@ -30,6 +30,7 @@ import {
 } from '@/(services)/api/sell';
 import { formatMoney } from '@/(utils)/format';
 import AppImage from '@/components/AppImage';
+import SaleCorrections from '@/components/SaleCorrections';
 
 // Presentation palette (white, black text, orange accent) - same as the sales app
 const C = {
@@ -895,6 +896,9 @@ export default function SellDetailPage() {
               </InfoRow>
             ) : null}
           </SectionCard>
+
+          {/* Returns / extra deliveries raised on this sale */}
+          {sellId ? <SaleCorrections sellId={sellId} onChanged={refetchSell} /> : null}
 
           {/* Delivery Action */}
           {(sell.saleStatus === 'APPROVED' || sell.saleStatus === 'PARTIALLY_DELIVERED') &&

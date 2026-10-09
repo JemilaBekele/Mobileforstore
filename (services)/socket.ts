@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import * as Notifications from 'expo-notifications';
 import { NotificationService } from '@/(utils)/notificationService';
+import { alertUser } from '@/(utils)/alertFeedback';
 
 // Define notification interface
 export interface Notification {
@@ -77,7 +78,10 @@ class SocketService {
 
   private async handleIncomingNotification(notification: Notification): Promise<void> {
     try {
-      // Show local notification with sound
+      // Loud alarm + vibration right away (app is open while the socket is connected)
+      alertUser();
+
+      // Banner in the notification shade (loud channel when the app is in the background)
       await NotificationService.showLocalNotification(notification);
       
       // Increment badge count

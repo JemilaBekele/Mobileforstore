@@ -2,10 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
   Alert,
   RefreshControl,
-  Modal,
-  TouchableWithoutFeedback,
   TouchableOpacity,
-  Keyboard,
 } from 'react-native';
 import {
   Text,
@@ -14,27 +11,19 @@ import {
   Button,
   ScrollView,
   Spinner,
-  Input,
 } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 // React Query imports
 import { useSocketSafe } from '@/(redux)/notification';
 import { Notification } from '@/(services)/socket';
 import { getUserDashboardSummary } from '@/(services)/api/dashboard';
 import { formatMoney, formatQty, toNumber } from '@/(utils)/format';
+import { AlertType, SEVERITY, StockAlertItem as AlertItem } from '@/components/stock-alert-item';
 
-type AlertType = 'expired' | 'lowStock' | 'expiringSoon';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-// Severity look: only shown through the small pill / icon
-const SEVERITY: Record<AlertType, { label: string; bg: string; fg: string; icon: IconName }> = {
-  expired: { label: 'Expired', bg: '#FEE2E2', fg: '#991B1B', icon: 'close-circle-outline' },
-  lowStock: { label: 'Low stock', bg: '#FEF3C7', fg: '#92400E', icon: 'trending-down-outline' },
-  expiringSoon: { label: 'Expiring soon', bg: '#FEF3C7', fg: '#92400E', icon: 'time-outline' },
-};
 
 // White card with a light border, used for every section
 const SectionCard = ({ children }: { children: React.ReactNode }) => (
@@ -79,15 +68,6 @@ const SectionTitle = ({
   </XStack>
 );
 
-// Small tinted pill
-const Pill = ({ label, bg, fg }: { label: string; bg: string; fg: string }) => (
-  <YStack paddingHorizontal={8} paddingVertical={3} borderRadius={999} backgroundColor={bg}>
-    <Text fontSize={11} fontWeight="700" color={fg}>
-      {label}
-    </Text>
-  </YStack>
-);
-
 // Secondary (outlined) button
 const OutlineButton = ({ label, onPress }: { label: string; onPress: () => void }) => (
   <Button
@@ -104,195 +84,6 @@ const OutlineButton = ({ label, onPress }: { label: string; onPress: () => void 
   </Button>
 );
 
-// Alert Item Component
-const AlertItem = ({ alert, type }: { alert: any; type: AlertType }) => {
-  const severity = SEVERITY[type];
-  const unit = alert.unit || 'unit';
-  const quantity = toNumber(alert.quantity);
-  const warningQuantity = toNumber(alert.warningQuantity);
-
-  return (
-    <YStack
-      backgroundColor="#F9FAFB"
-      borderWidth={1}
-      borderColor="#F3F4F6"
-      padding={12}
-      borderRadius={12}
-      gap={4}
-    >
-      <XStack justifyContent="space-between" alignItems="center" gap={8}>
-        <Text flex={1} fontSize={14} fontWeight="600" color="#111827" numberOfLines={2}>
-          {alert.name || 'Unknown Product'}
-        </Text>
-        <Pill label={severity.label} bg={severity.bg} fg={severity.fg} />
-      </XStack>
-      <Text fontSize={12} color="#6B7280">
-        {alert.locationName || 'Unknown Location'} · {alert.productCode || 'N/A'}
-      </Text>
-      {type === 'lowStock' ? (
-        <XStack justifyContent="space-between" alignItems="center">
-          <Text fontSize={13} fontWeight="700" color="#111827">
-            {formatQty(quantity)} {unit} left
-          </Text>
-          <Text fontSize={12} color="#6B7280">
-            Alert at {formatQty(warningQuantity)} {unit}
-          </Text>
-        </XStack>
-      ) : (
-        <Text fontSize={12} color="#6B7280">
-          Batch: {alert.batchNumber || 'N/A'} · Qty: {formatQty(quantity)} {unit}
-        </Text>
-      )}
-      {type === 'expired' ? (
-        <Text fontSize={12} color="#374151">
-          Expired: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
-        </Text>
-      ) : null}
-      {type === 'expiringSoon' ? (
-        <Text fontSize={12} color="#374151">
-          Expires: {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : 'Unknown date'}
-        </Text>
-      ) : null}
-    </YStack>
-  );
-};
-
-// Full List Modal Component
-const FullListModal = ({
-  visible,
-  onClose,
-  title,
-  items,
-  type,
-  searchQuery,
-  setSearchQuery,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  title: string;
-  items: any[];
-  type: AlertType;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-}) => {
-  const [filteredItems, setFilteredItems] = useState(items);
-  const [searchFocused, setSearchFocused] = useState(false);
-
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredItems(items);
-    } else {
-      const query = searchQuery.toLowerCase();
-      const filtered = items.filter(item =>
-        (item.name || '').toLowerCase().includes(query) ||
-        (item.productCode || '').toLowerCase().includes(query) ||
-        (item.batchNumber || '').toLowerCase().includes(query) ||
-        (item.locationName || '').toLowerCase().includes(query)
-      );
-      setFilteredItems(filtered);
-    }
-  }, [searchQuery, items]);
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <YStack
-          flex={1}
-          backgroundColor="rgba(0,0,0,0.5)"
-          justifyContent="flex-end"
-        >
-          <TouchableWithoutFeedback>
-            <YStack
-              backgroundColor="#FFFFFF"
-              borderTopLeftRadius={20}
-              borderTopRightRadius={20}
-              padding={16}
-              maxHeight="85%"
-            >
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <YStack gap={12}>
-                  <XStack justifyContent="space-between" alignItems="center" gap={12}>
-                    <YStack flex={1}>
-                      <Text fontSize={18} fontWeight="700" color="#111827">{title}</Text>
-                      <Text fontSize={13} color="#6B7280">
-                        Total: {formatQty(items.length)} items
-                      </Text>
-                    </YStack>
-                    <TouchableOpacity
-                      onPress={onClose}
-                      accessibilityLabel="Close"
-                      style={{ padding: 6 }}
-                    >
-                      <Ionicons name="close" size={22} color="#6B7280" />
-                    </TouchableOpacity>
-                  </XStack>
-
-                  {/* Search Input */}
-                  <XStack
-                    alignItems="center"
-                    backgroundColor="#FFFFFF"
-                    borderWidth={1}
-                    borderColor={searchFocused ? '#FF6B00' : '#E5E7EB'}
-                    borderRadius={12}
-                    paddingLeft={12}
-                  >
-                    <Ionicons name="search" size={18} color="#6B7280" />
-                    <Input
-                      flex={1}
-                      placeholder="Search by name, code, batch, or location..."
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      onFocus={() => setSearchFocused(true)}
-                      onBlur={() => setSearchFocused(false)}
-                      backgroundColor="transparent"
-                      borderWidth={0}
-                      focusStyle={{ borderWidth: 0 }}
-                      color="#111827"
-                      fontSize={15}
-                      paddingHorizontal={10}
-                      placeholderTextColor="#9CA3AF"
-                    />
-                  </XStack>
-
-                  {/* Search Results Summary */}
-                  {searchQuery ? (
-                    <Text fontSize={13} color="#6B7280">
-                      Found {filteredItems.length} items matching &quot;{searchQuery}&quot;
-                    </Text>
-                  ) : null}
-
-                  {/* Items List */}
-                  <YStack gap={8}>
-                    {filteredItems.length === 0 ? (
-                      <YStack alignItems="center" padding={20} gap={8}>
-                        <Ionicons name="search-outline" size={28} color="#9CA3AF" />
-                        <Text color="#6B7280" textAlign="center">
-                          No items found{searchQuery ? ' matching your search' : ''}
-                        </Text>
-                      </YStack>
-                    ) : (
-                      filteredItems.map((alert, index) => (
-                        <AlertItem key={`${type}-${alert.id || index}-${alert.batchId || ''}-${alert.locationName || ''}`} alert={alert} type={type} />
-                      ))
-                    )}
-                  </YStack>
-
-                  <OutlineButton label="Close" onPress={onClose} />
-                </YStack>
-              </ScrollView>
-            </YStack>
-          </TouchableWithoutFeedback>
-        </YStack>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
-};
-
 // Small stat tile used in the summary cards
 const StatTile = ({
   value,
@@ -300,14 +91,18 @@ const StatTile = ({
   valueColor = '#111827',
   icon,
   iconColor,
+  onPress,
 }: {
   value: string;
   label: string;
   valueColor?: string;
   icon?: IconName;
   iconColor?: string;
+  onPress?: () => void;
 }) => (
   <YStack
+    onPress={onPress}
+    pressStyle={onPress ? { backgroundColor: '#F9FAFB' } : undefined}
     flex={1}
     minWidth={90}
     padding={12}
@@ -329,6 +124,11 @@ const StatTile = ({
 
 const DashboardScreen = () => {
   const queryClient = useQueryClient();
+  const router = useRouter();
+
+  // Full page with every low-stock / expired / expiring-soon item
+  const openAlerts = (type: AlertType) =>
+    router.push({ pathname: '/home/alerts', params: { type } } as any);
 
   // React Query for dashboard data
   const {
@@ -348,16 +148,6 @@ const DashboardScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotificationBadge, setShowNotificationBadge] = useState(false);
-
-  // Modal states
-  const [showExpiredModal, setShowExpiredModal] = useState(false);
-  const [showLowStockModal, setShowLowStockModal] = useState(false);
-  const [showExpiringSoonModal, setShowExpiringSoonModal] = useState(false);
-
-  // Search states for modals
-  const [expiredSearchQuery, setExpiredSearchQuery] = useState('');
-  const [lowStockSearchQuery, setLowStockSearchQuery] = useState('');
-  const [expiringSoonSearchQuery, setExpiringSoonSearchQuery] = useState('');
 
   // Generate unique key for alert items
   const generateAlertKey = (alert: any, index: number) => {
@@ -634,18 +424,21 @@ const DashboardScreen = () => {
               <StatTile
                 value={formatQty(expiredCount)}
                 label="Expired"
+                onPress={() => openAlerts('expired')}
                 icon={SEVERITY.expired.icon}
                 iconColor="#DC2626"
               />
               <StatTile
                 value={formatQty(lowStockCount)}
                 label="Low Stock"
+                onPress={() => openAlerts('lowStock')}
                 icon={SEVERITY.lowStock.icon}
                 iconColor="#D97706"
               />
               <StatTile
                 value={formatQty(expiringCount)}
                 label="Expiring Soon"
+                onPress={() => openAlerts('expiringSoon')}
                 icon={SEVERITY.expiringSoon.icon}
                 iconColor="#D97706"
               />
@@ -684,12 +477,10 @@ const DashboardScreen = () => {
                 <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expired" />
               ))}
 
-              {expiredCount > 5 ? (
-                <OutlineButton
-                  label={`View all ${expiredCount} expired items`}
-                  onPress={() => setShowExpiredModal(true)}
-                />
-              ) : null}
+              <OutlineButton
+                label={`View all ${expiredCount} expired items`}
+                onPress={() => openAlerts('expired')}
+              />
             </SectionCard>
           ) : null}
 
@@ -704,16 +495,14 @@ const DashboardScreen = () => {
                 count={lowStockCount}
               />
 
-              {stockAlerts.lowStockProducts.slice(0, 10).map((alert: unknown, index: number) => (
+              {stockAlerts.lowStockProducts.slice(0, 5).map((alert: unknown, index: number) => (
                 <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="lowStock" />
               ))}
 
-              {lowStockCount > 10 ? (
-                <OutlineButton
-                  label={`View all ${lowStockCount} low stock items`}
-                  onPress={() => setShowLowStockModal(true)}
-                />
-              ) : null}
+              <OutlineButton
+                label={`View all ${lowStockCount} low stock items`}
+                onPress={() => openAlerts('lowStock')}
+              />
             </SectionCard>
           ) : null}
 
@@ -728,60 +517,18 @@ const DashboardScreen = () => {
                 count={expiringCount}
               />
 
-              {stockAlerts.expiringSoonProducts.slice(0, 10).map((alert: unknown, index: number) => (
+              {stockAlerts.expiringSoonProducts.slice(0, 5).map((alert: unknown, index: number) => (
                 <AlertItem key={generateAlertKey(alert, index)} alert={alert} type="expiringSoon" />
               ))}
 
-              {expiringCount > 10 ? (
-                <OutlineButton
-                  label={`View all ${expiringCount} expiring items`}
-                  onPress={() => setShowExpiringSoonModal(true)}
-                />
-              ) : null}
+              <OutlineButton
+                label={`View all ${expiringCount} expiring items`}
+                onPress={() => openAlerts('expiringSoon')}
+              />
             </SectionCard>
           ) : null}
         </YStack>
       </ScrollView>
-
-      {/* Full List Modals */}
-      <FullListModal
-        visible={showExpiredModal}
-        onClose={() => {
-          setShowExpiredModal(false);
-          setExpiredSearchQuery('');
-        }}
-        title="All Expired Products"
-        items={stockAlerts.expiredProducts || []}
-        type="expired"
-        searchQuery={expiredSearchQuery}
-        setSearchQuery={setExpiredSearchQuery}
-      />
-
-      <FullListModal
-        visible={showLowStockModal}
-        onClose={() => {
-          setShowLowStockModal(false);
-          setLowStockSearchQuery('');
-        }}
-        title="All Low Stock Products"
-        items={stockAlerts.lowStockProducts || []}
-        type="lowStock"
-        searchQuery={lowStockSearchQuery}
-        setSearchQuery={setLowStockSearchQuery}
-      />
-
-      <FullListModal
-        visible={showExpiringSoonModal}
-        onClose={() => {
-          setShowExpiringSoonModal(false);
-          setExpiringSoonSearchQuery('');
-        }}
-        title="All Expiring Soon Products"
-        items={stockAlerts.expiringSoonProducts || []}
-        type="expiringSoon"
-        searchQuery={expiringSoonSearchQuery}
-        setSearchQuery={setExpiringSoonSearchQuery}
-      />
     </YStack>
   );
 };

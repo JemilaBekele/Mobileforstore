@@ -231,3 +231,42 @@ export interface GetUserDashboardSummaryResponse {
     criticalAlerts: number;
   };
 }
+// Sale correction (return / extra delivery) raised against a sale.
+// quantity < 0 = items returned to stock, > 0 = more delivered to the customer.
+export type SellStockCorrectionStatus = 'PENDING' | 'PARTIAL' | 'APPROVED' | 'REJECTED';
+
+export interface SellStockCorrectionBatch {
+  id: string;
+  batchId: string;
+  batch?: ProductBatch;
+  quantity: number;
+}
+
+export interface SellStockCorrectionItem {
+  id: string;
+  correctionId: string;
+  productId: string;
+  product?: Product;
+  subProductId?: string | null;
+  subProduct?: SubProduct | null;
+  shopId?: string | null;
+  shop?: Shop | null;
+  unitOfMeasure?: UnitOfMeasure;
+  itemSaleStatus: ItemSaleStatus; // PENDING until approved as delivered
+  quantity: number;
+  unitPrice: number | string;
+  totalPrice: number | string;
+  batches?: SellStockCorrectionBatch[];
+}
+
+export interface SellStockCorrection {
+  id: string;
+  sellId?: string;
+  status: SellStockCorrectionStatus;
+  reference?: string | null;
+  notes?: string | null;
+  total?: number | string;
+  createdAt: string;
+  createdBy?: { id: string; name: string } | null;
+  items?: SellStockCorrectionItem[];
+}

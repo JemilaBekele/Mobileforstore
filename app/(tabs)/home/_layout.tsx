@@ -12,6 +12,7 @@ const HomeLayout = () => {
                 }}
                 
             />
+            <Stack.Screen name="alerts" options={{ headerShown: false }} />
     
     
           

@@ -1,5 +1,5 @@
 import api from "@/(utils)/config";
-import { DeliveryData, GetAllSellsUserParams, GetAllSellsUserResponse, ProductBatch } from "@/(utils)/types";
+import { DeliveryData, GetAllSellsUserParams, GetAllSellsUserResponse, ProductBatch, SellStockCorrection } from "@/(utils)/types";
 
 
 export const getAllSellsUser = async (
@@ -95,5 +95,43 @@ export const partialSaleDelivery = async (
     };
   } catch (error: any) {
     throw new Error(error.response?.data?.message || "Failed to process partial delivery");
+  }
+};
+// Corrections (returns / extra deliveries) raised against a sale. The server
+// keeps only the lines for shops this user can see.
+export const getSaleCorrections = async (
+  sellId: string
+): Promise<SellStockCorrection[]> => {
+  try {
+    const response = await api.get(`/sells/${sellId}/stock/corrections/filter/stock`);
+    return response.data.sellStockCorrections || [];
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to fetch sale corrections");
+  }
+};
+
+// Approve the lines that were actually handed over / taken back. Lines left
+// out stay pending and the correction becomes PARTIAL.
+export const approveSaleCorrection = async (
+  id: string,
+  deliveredItemIds: string[]
+): Promise<{ message: string }> => {
+  try {
+    const response = await api.patch(`/sell-stock-corrections/${id}/approve`, {
+      deliveredItemIds,
+    });
+    return { message: response.data.message || "Correction approved" };
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to approve correction");
+  }
+};
+
+// Reject a correction (only while nothing of it has been approved yet)
+export const rejectSaleCorrection = async (id: string): Promise<{ message: string }> => {
+  try {
+    const response = await api.patch(`/sell-stock-corrections/${id}/reject`);
+    return { message: response.data.message || "Correction rejected" };
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to reject correction");
   }
 };
